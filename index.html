@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚡ KINGS ELITE CHAMPIONS</title>
+    <!-- Librería MQTT oficial para el navegador -->
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        :root {
+            --bg-base: #060913;
+            --bg-surface: #0d1222;
+            --bg-card: #151c33;
+            --bg-input: #1e2646;
+            --accent-cyan: #00f2fe;
+            --accent-blue: #0066ff;
+            --accent-gold: #ffb703;
+            --accent-purple: #7928ca;
+            --text-heading: #ffffff;
+            --text-body: #cbd5e1;
+            --text-muted: #5c6b84;
+            --border-light: rgba(255, 255, 255, 0.04);
+            --success: #10b981;
+            --danger: #ef4444;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-base);
+            color: var(--text-body);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(0, 242, 254, 0.08), transparent 50%),
+                radial-gradient(circle at 90% 80%, rgba(121, 40, 202, 0.05), transparent 40%);
+            background-attachment: fixed;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .app-container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 30px;
+            box-sizing: border-box;
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: linear-gradient(135deg, rgba(13,18,34,0.8), rgba(6,9,19,0.8));
+            backdrop-filter: blur(20px);
+            padding: 24px 36px;
+            border-radius: 20px;
+            border: 1px solid var(--border-light);
+            margin-bottom: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        }
+
+        .brand h1 {
+            margin: 0;
+            font-size: 1.7rem;
+            font-weight: 900;
+            letter-spacing: 2px;
+            background: linear-gradient(90deg, #fff, var(--accent-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand p { margin: 6px 0 0 0; color: var(--text-muted); font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; }
+
+        .header-right {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 12px;
+        }
+
+        #sync-status {
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            padding: 6px 14px;
+            border-radius: 30px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid var(--border-light);
+            transition: all 0.3s ease;
+        }
+
+        .status-disconnected { color: var(--danger); border-color: rgba(239, 68, 68, 0.2) !important; }
+        .status-connected { color: var(--success); border-color: rgba(16, 185, 129, 0.2) !important; }
+
+        .nav-tabs {
+            display: flex;
+            gap: 10px;
+            background: rgba(21, 28, 51, 0.6);
+            padding: 6px;
+            border-radius: 14px;
+            border: 1px solid var(--border-light);
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 10px 18px;
+            border-radius: 10px;
+            cursor: pointer;
+            font-weight: 700;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn:hover { color: #fff; }
+        .tab-btn.active {
+            background: var(--bg-card);
+            color: var(--accent-cyan);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .kpi-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-light);
+            border-radius: 16px;
+            padding: 20px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .kpi-card h3 { margin: 0; font-size: 1.8rem; font-weight: 800; color: var(--text-heading); }
+        .kpi-card p { margin: 4px 0 0 0; font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 700; }
+        .kpi-icon { font-size: 1.6rem; opacity: 0.3; }
+
+        .view-pane { display: none; }
+        .view-pane.active { display: grid; }
+        .layout-grid-main { grid-template-columns: 1fr 400px; gap: 30px; }
+        .layout-full { grid-template-columns: 1fr; }
+
+        .dashboard-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-light);
+            border-radius: 20px;
+            padding: 26px;
+            box-shadow: 0 12px 30px rgba(0,0,0,0.3);
+        }
+
+        .card-title {
+            margin-top: 0;
+            margin-bottom: 24px;
+            font-size: 1rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-heading);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .shield-container {
+            width: 28px;
+            height: 28px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            background: rgba(255,255,255,0.02);
+            overflow: hidden;
+            vertical-align: middle;
+        }
+        .shield-container img { width: 100%; height: 100%; object-fit: cover; }
+        .shield-container span { font-size: 1.1rem; }
+
+        table { width: 100%; border-collapse: collapse; }
+        th { padding: 14px 12px; color: var(--text-muted); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; text-align: left; border-bottom: 2px solid var(--border-light); }
+        td { padding: 16px 12px; border-bottom: 1px solid var(--border-light); font-size: 0.95rem; }
+        
+        .team-cell { display: flex; align-items: center; gap: 12px; font-weight: 700; color: var(--text-heading); }
+        .pts-cell { font-weight: 900; color: var(--accent-gold); }
+
+        .match-card {
+            background: rgba(21, 28, 51, 0.4);
+            border: 1px solid var(--border-light);
+            border-radius: 14px;
+            padding: 16px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .m-team { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 0.9rem; width: 42%; }
+        .m-team.right { justify-content: flex-end; text-align: right; }
+        .m-score-box {
+            background: var(--bg-input);
+            padding: 6px 14px;
+            border-radius: 8px;
+            font-weight: 900;
+            color: var(--accent-cyan);
+            min-width: 32px;
+            text-align: center;
+        }
+
+        /* Bracket */
+        .bracket-wrapper {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            gap: 40px;
+            padding: 30px 10px;
+        }
+        .bracket-branch { display: flex; flex-direction: column; gap: 40px; width: 100%; max-width: 420px; }
+        .branch-title { font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: 800; text-align: center; margin-bottom: -20px; }
+        .ko-box { background: var(--bg-surface); border: 1px solid var(--border-light); border-radius: 16px; padding: 18px; }
+        .ko-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; }
+        .ko-score-capsules { display: flex; gap: 6px; }
+        .capsule { background: var(--bg-base); padding: 4px 10px; border-radius: 6px; font-size: 0.8rem; font-weight: 800; min-width: 14px; text-align: center; }
+        .capsule.total { color: var(--accent-gold); background: rgba(255, 183, 3, 0.1); }
+
+        .roster-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        .roster-card { background: rgba(21, 28, 51, 0.4); border: 1px solid var(--border-light); border-radius: 14px; padding: 20px; }
+        .roster-team-head { display: flex; align-items: center; gap: 10px; font-weight: 800; margin-bottom: 12px; border-bottom: 1px solid var(--border-light); padding-bottom: 8px; }
+
+        /* Admin */
+        .admin-zone { background: linear-gradient(135deg, #070912, #11071d); border: 1px solid rgba(121, 40, 202, 0.2); margin-top: 40px; }
+        .admin-sub-tabs { display: none; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: 20px; border-top: 1px solid var(--border-light); padding-top: 20px; }
+        .sub-panel-card { background: rgba(255,255,255,0.01); border: 1px solid var(--border-light); padding: 20px; border-radius: 14px; }
+        .sub-panel-card h4 { margin-top: 0; margin-bottom: 14px; font-size: 0.9rem; text-transform: uppercase; color: #fff; }
+        
+        input, select, textarea { background: var(--bg-input); border: 1px solid var(--border-light); color: #fff; padding: 10px 14px; border-radius: 8px; font-size: 0.85rem; width: 100%; box-sizing: border-box; margin-bottom: 10px; }
+        button { background: linear-gradient(135deg, var(--accent-blue), #0044cc); color: white; font-weight: 700; border: none; padding: 12px 20px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; }
+        button:hover { opacity: 0.9; }
+        .team-edit-box { background: rgba(0,0,0,0.2); padding: 12px; border-radius: 10px; margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- HEADER -->
+        <header>
+            <div class="brand">
+                <h1>⚡ KINGS ELITE CHAMPIONS</h1>
+                <p>Estadísticas Avanzadas y Gestión en Tiempo Real</p>
+            </div>
+            <div class="header-right">
+                <div id="sync-status" class="status-disconnected">● Desconectado</div>
+                <div class="nav-tabs">
+                    <button class="tab-btn active" id="tab-liga" onclick="switchView('liga')">Fase Regular</button>
+                    <button class="tab-btn" id="tab-playoffs" onclick="switchView('playoffs')">Playoffs</button>
+                    <button class="tab-btn" id="tab-scorers" onclick="switchView('scorers')">👟 Goleadores</button>
+                    <button class="tab-btn" id="tab-rosters" onclick="switchView('rosters')">Plantillas</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- KPIS -->
+        <div class="kpi-grid">
+            <div class="kpi-card"><div><h3 id="kpi-goles">0</h3><p>Goles Totales</p></div><div class="kpi-icon">⚽</div></div>
+            <div class="kpi-card"><div><h3 id="kpi-pj">0/6</h3><p>Progreso Torneo</p></div><div class="kpi-icon">📊</div></div>
+            <div class="kpi-card"><div><h3 id="kpi-pichichi">N/A</h3><p>Máximo Goleador</p></div><div class="kpi-icon">👟</div></div>
+            <div class="kpi-card"><div><h3 id="kpi-fase">Liga</h3><p>Estado Operativo</p></div><div class="kpi-icon">👑</div></div>
+        </div>
+
+        <!-- VIEW 1: LIGA -->
+        <div id="view-liga" class="view-pane active layout-grid-main">
+            <div class="dashboard-card">
+                <h2 class="card-title">📊 Tabla de Clasificación</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Club</th>
+                            <th style="text-align:center;">PJ</th>
+                            <th style="text-align:center;">G</th>
+                            <th style="text-align:center;">E</th>
+                            <th style="text-align:center;">P</th>
+                            <th style="text-align:center;">GF</th>
+                            <th style="text-align:center;">GC</th>
+                            <th style="text-align:center;">DG</th>
+                            <th style="text-align:center;">PTS</th>
+                        </tr>
+                    </thead>
+                    <tbody id="render-tabla-liga"></tbody>
+                </table>
+            </div>
+            <div class="dashboard-card">
+                <h2 class="card-title">📅 Partidos</h2>
+                <div id="render-partidos-liga"></div>
+            </div>
+        </div>
+
+        <!-- VIEW 2: PLAYOFFS -->
+        <div id="view-playoffs" class="view-pane layout-full">
+            <div class="dashboard-card">
+                <h2 class="card-title">⭐ Fase de Eliminación Directa</h2>
+                <div class="bracket-wrapper">
+                    <div class="bracket-branch">
+                        <div class="branch-title">Semifinales</div>
+                        <div class="ko-box">
+                            <div class="ko-row"><div id="render-s1-l-name">-</div>
+                                <div class="ko-score-capsules"><span class="capsule" id="v-s1-li">-</span><span class="capsule" id="v-s1-lv">-</span><span class="capsule total" id="v-s1-lt">0</span></div>
+                            </div>
+                            <div class="ko-row" style="margin-top:8px; border-top:1px solid var(--border-light); padding-top:8px;"><div id="render-s1-v-name">-</div>
+                                <div class="ko-score-capsules"><span class="capsule" id="v-s1-vi">-</span><span class="capsule" id="v-s1-vv">-</span><span class="capsule total" id="v-s1-vt">0</span></div>
+                            </div>
+                        </div>
+                        <div class="ko-box">
+                            <div class="ko-row"><div id="render-s2-l-name">-</div>
+                                <div class="ko-score-capsules"><span class="capsule" id="v-s2-li">-</span><span class="capsule" id="v-s2-lv">-</span><span class="capsule total" id="v-s2-lt">0</span></div>
+                            </div>
+                            <div class="ko-row" style="margin-top:8px; border-top:1px solid var(--border-light); padding-top:8px;"><div id="render-s2-v-name">-</div>
+                                <div class="ko-score-capsules"><span class="capsule" id="v-s2-vi">-</span><span class="capsule" id="v-s2-vv">-</span><span class="capsule total" id="v-s2-vt">0</span></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="bracket-branch">
+                        <div class="branch-title">Gran Final</div>
+                        <div class="ko-box" style="border-color: var(--accent-gold);">
+                            <div class="ko-row"><div id="render-f-l-name" style="color:var(--accent-gold); font-weight:bold;">Finalista 1</div><span class="m-score-box" id="v-f-l">-</span></div>
+                            <div class="ko-row" style="margin-top:12px; border-top:1px solid var(--border-light); padding-top:12px;"><div id="render-f-v-name" style="color:var(--accent-gold); font-weight:bold;">Finalista 2</div><span class="m-score-box" id="v-f-v">-</span></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIEW 3: SCORERS -->
+        <div id="view-scorers" class="view-pane layout-full">
+            <div class="dashboard-card">
+                <h2 class="card-title">👟 Tabla de Goleadores (Pichichi)</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th style="width: 60px; text-align: center;">Pos</th>
+                            <th>Jugador</th>
+                            <th>Equipo</th>
+                            <th style="text-align: center; color: var(--accent-cyan);">Goles ⚽</th>
+                        </tr>
+                    </thead>
+                    <tbody id="render-tabla-goleadores"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- VIEW 4: ROSTERS -->
+        <div id="view-rosters" class="view-pane layout-full">
+            <div class="dashboard-card">
+                <h2 class="card-title">📋 Plantillas Registradas</h2>
+                <div class="roster-grid" id="render-roster-grid"></div>
+            </div>
+        </div>
+
+        <!-- ADMIN PANEL -->
+        <div class="dashboard-card admin-zone">
+            <h2 class="card-title" style="color: var(--accent-purple);">🔒 Panel de Modificación Avanzada</h2>
+            <div id="auth-box" style="display: flex; gap: 12px;">
+                <input type="password" id="pass-key" placeholder="Código de acceso de organizador...">
+                <button onclick="unlockAdmin()" style="background: var(--accent-purple);">Acceder</button>
+            </div>
+
+            <div class="admin-sub-tabs" id="admin-controls-panel">
+                <div class="sub-panel-card">
+                    <h4>⚽ Actas de Partidos</h4>
+                    <select id="select-partido-liga"></select>
+                    <div style="display:flex; gap:10px;">
+                        <input type="number" id="g-local-liga" placeholder="G. Local">
+                        <input type="number" id="g-vis-liga" placeholder="G. Vis">
+                    </div>
+                    <button onclick="saveResultLiga()" style="width:100%; margin-bottom:15px;">Guardar Liga</button>
+                    
+                    <select id="select-ronda-ko">
+                        <option value="s1-i">SF 1 - Ida</option>
+                        <option value="s1-v">SF 1 - Vuelta</option>
+                        <option value="s2-i">SF 2 - Ida</option>
+                        <option value="s2-v">SF 2 - Vuelta</option>
+                        <option value="final">Gran Final</option>
+                    </select>
+                    <div style="display:flex; gap:10px;">
+                        <input type="number" id="g-local-ko" placeholder="G. Local">
+                        <input type="number" id="g-vis-ko" placeholder="G. Vis">
+                    </div>
+                    <button onclick="saveResultKO()" style="width:100%; background:var(--accent-cyan); color:#000;">Guardar KO</button>
+                    <button onclick="generarCrucesChampions()" style="width:100%; background: var(--accent-gold); color: #000; margin-top:15px;">⚡ Cerrar Liga y Crear Cruces</button>
+                </div>
+
+                <div class="sub-panel-card">
+                    <h4>👟 Gestión de Goleadores</h4>
+                    <input type="text" id="scorer-name" placeholder="Nombre del Jugador">
+                    <select id="scorer-team-select"></select>
+                    <button onclick="addOrUpdateScorer()" style="width:100%; background:#10b981; margin-bottom:15px;">Añadir / +1 Gol</button>
+                    <p style="font-size:0.75rem; color:var(--text-muted);">Escribe el nombre de un jugador existente para sumarle 1 gol automáticamente, o escribe uno nuevo para agregarlo.</p>
+                </div>
+
+                <div class="sub-panel-card" style="max-height: 400px; overflow-y: auto;">
+                    <h4>🛠️ Editor de Equipos</h4>
+                    <div id="render-inputs-editor"></div>
+                    <button onclick="updateTeamsData()" style="width:100%; background: #10b981;">💾 Guardar Cambios</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // CONFIGURACIÓN DE HIVEMQ (Canal único de comunicación)
+        // TIP: Si quieres crear otra competición totalmente diferente, cambia el texto de abajo.
+        const MQTT_TOPIC = "kings_elite_champions/torneo_data_grupo_wheatley";
+        
+        // Conexión segura por WebSockets al bróker público de HiveMQ
+        const mqttClient = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
+
+        let coreDB = {
+            equipos: [
+                { id: 1, nombre: "Los Mayores FC", escudo: "🛡️", lista: "Wheatley, Dani, Carlos, Miki, Javi", pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0 },
+                { id: 2, nombre: "Dream Team Barrio", escudo: "👑", lista: "Soto, Andrés, Kike, Nacho, Pibe", pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0 },
+                { id: 3, nombre: "Pequeños Promesas", escudo: "💎", lista: "Nico, Lucas, Hugo, Rafa", pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0 },
+                { id: 4, nombre: "Sporting Cachorros", escudo: "⚡", lista: "Samu, Leo, Gabi, Izan, Tomi", pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0 }
+            ],
+            partidosLiga: [
+                { id: 1, local: 1, visitante: 2, golesL: "-", golesV: "-", estado: "Pendiente" },
+                { id: 2, local: 3, visitante: 4, golesL: "-", golesV: "-", estado: "Pendiente" },
+                { id: 3, local: 1, visitante: 3, golesL: "-", golesV: "-", estado: "Pendiente" },
+                { id: 4, local: 2, visitante: 4, golesL: "-", golesV: "-", estado: "Pendiente" },
+                { id: 5, local: 4, visitante: 1, golesL: "-", golesV: "-", estado: "Pendiente" },
+                { id: 6, local: 2, visitante: 3, golesL: "-", golesV: "-", estado: "Pendiente" }
+            ],
+            champions: {
+                fase: "Liga Regular",
+                semi1: { localId: null, visitanteId: null, s1Li: "-", s1Lv: "-", s1Vi: "-", s1Vv: "-" },
+                semi2: { localId: null, visitanteId: null, s2Li: "-", s2Lv: "-", s2Vi: "-", s2Vv: "-" },
+                final: { localName: "Ganador Semi 1", visitanteName: "Ganador Semi 2", golesL: "-", golesV: "-" }
+            },
+            goleadores: []
+        };
+
+        // Respaldo por si falla la conexión en algún momento
+        if(localStorage.getItem("kings_elite_db")) {
+            coreDB = JSON.parse(localStorage.getItem("kings_elite_db"));
+        }
+
+        // --- SISTEMA DE SINCRONIZACIÓN EN TIEMPO REAL ---
+        mqttClient.on('connect', () => {
+            const indicator = document.getElementById("sync-status");
+            indicator.innerText = "● En línea (Sincronizado)";
+            indicator.className = "status-connected";
+
+            // Nos suscribimos al canal del torneo
+            mqttClient.subscribe(MQTT_TOPIC, (err) => {
+                if (!err) console.log("Suscrito con éxito al canal del torneo en HiveMQ.");
+            });
+        });
+
+        mqttClient.on('close', () => {
+            const indicator = document.getElementById("sync-status");
+            indicator.innerText = "● Desconectado (Modo Local)";
+            indicator.className = "status-disconnected";
+        });
+
+        // Escuchar cambios enviados por el Administrador
+        mqttClient.on('message', (topic, message) => {
+            if (topic === MQTT_TOPIC) {
+                try {
+                    const cloudDB = JSON.parse(message.toString());
+                    coreDB = cloudDB;
+                    localStorage.setItem("kings_elite_db", JSON.stringify(coreDB));
+                    renderEngine();
+                } catch (e) {
+                    console.error("Error procesando actualización de red:", e);
+                }
+            }
+        });
+
+        // Función clave para guardar localmente y radiar a todos los móviles conectados
+        function saveAndSync() {
+            localStorage.setItem("kings_elite_db", JSON.stringify(coreDB));
+            renderEngine();
+            // Enviamos los datos con 'retain: true' para que HiveMQ los memorice para futuros visitantes
+            mqttClient.publish(MQTT_TOPIC, JSON.stringify(coreDB), { qos: 1, retain: true });
+        }
+
+
+        // --- MOTOR DE RENDERIZADO INTERNO ---
+        function switchView(view) {
+            document.querySelectorAll('.view-pane').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`view-${view}`).classList.add('active');
+            document.getElementById(`tab-${view}`).classList.add('active');
+        }
+
+        function parseShield(shieldStr) {
+            if (shieldStr.startsWith('http')) return `<div class="shield-container"><img src="${shieldStr}"></div>`;
+            return `<div class="shield-container"><span>${shieldStr || '🛡️'}</span></div>`;
+        }
+
+        function renderEngine() {
+            // TABLA LIGA
+            const tbody = document.getElementById("render-tabla-liga");
+            tbody.innerHTML = "";
+            const sortedTeams = [...coreDB.equipos].sort((a,b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
+            sortedTeams.forEach(eq => {
+                tbody.innerHTML += `<tr><td><div class="team-cell">${parseShield(eq.escudo)} <span>${eq.nombre}</span></div></td><td style="text-align:center;">${eq.pj}</td><td style="text-align:center;">${eq.g}</td><td style="text-align:center;">${eq.e}</td><td style="text-align:center;">${eq.p}</td><td style="text-align:center;">${eq.gf}</td><td style="text-align:center;">${eq.gc}</td><td style="text-align:center;">${eq.dg}</td><td style="text-align:center;" class="pts-cell">${eq.pts}</td></tr>`;
+            });
+
+            // PARTIDOS
+            const listLiga = document.getElementById("render-partidos-liga");
+            const selectLiga = document.getElementById("select-partido-liga");
+            const adminTeamsSelect = document.getElementById("scorer-team-select");
+            listLiga.innerHTML = ""; selectLiga.innerHTML = ""; adminTeamsSelect.innerHTML = "";
+            
+            let totalGoles = 0, partidosJugados = 0;
+            coreDB.partidosLiga.forEach(p => {
+                const el = coreDB.equipos.find(e => e.id === p.local);
+                const ev = coreDB.equipos.find(e => e.id === p.visitante);
+                if(p.estado === "Terminado") { totalGoles += (p.golesL + p.golesV); partidosJugados++; }
+                listLiga.innerHTML += `<div class="match-card"><div class="m-team">${parseShield(el.escudo)} <span>${el.nombre}</span></div><div class="m-score-box">${p.golesL} - ${p.golesV}</div><div class="m-team right"><span>${ev.nombre}</span> ${parseShield(ev.escudo)}</div></div>`;
+                selectLiga.innerHTML += `<option value="${p.id}">${el.nombre} vs ${ev.nombre}</option>`;
+            });
+
+            coreDB.equipos.forEach(e => adminTeamsSelect.innerHTML += `<option value="${e.nombre}">${e.nombre}</option>`);
+
+            // PLAYOFFS
+            const ch = coreDB.champions;
+            const s1l = coreDB.equipos.find(e => e.id === ch.semi1.localId);
+            const s1v = coreDB.equipos.find(e => e.id === ch.semi1.visitanteId);
+            const s2l = coreDB.equipos.find(e => e.id === ch.semi2.localId);
+            const s2v = coreDB.equipos.find(e => e.id === ch.semi2.visitanteId);
+
+            document.getElementById("render-s1-l-name").innerHTML = s1l ? `${parseShield(s1l.escudo)} ${s1l.nombre}` : "1º Clasificado";
+            document.getElementById("render-s1-v-name").innerHTML = s1v ? `${parseShield(s1v.escudo)} ${s1v.nombre}` : "4º Clasificado";
+            document.getElementById("render-s2-l-name").innerHTML = s2l ? `${parseShield(s2l.escudo)} ${s2l.nombre}` : "2º Clasificado";
+            document.getElementById("render-s2-v-name").innerHTML = s2v ? `${parseShield(s2v.escudo)} ${s2v.nombre}` : "3º Clasificado";
+
+            document.getElementById("v-s1-li").innerText = ch.semi1.s1Li; document.getElementById("v-s1-lv").innerText = ch.semi1.s1Lv;
+            document.getElementById("v-s1-vi").innerText = ch.semi1.s1Vi; document.getElementById("v-s1-vv").innerText = ch.semi1.s1Vv;
+            document.getElementById("v-s1-lt").innerText = (parseInt(ch.semi1.s1Li)||0)+(parseInt(ch.semi1.s1Lv)||0);
+            document.getElementById("v-s1-vt").innerText = (parseInt(ch.semi1.s1Vi)||0)+(parseInt(ch.semi1.s1Vv)||0);
+
+            document.getElementById("v-s2-li").innerText = ch.semi2.s2Li; document.getElementById("v-s2-lv").innerText = ch.semi2.s2Lv;
+            document.getElementById("v-s2-vi").innerText = ch.semi2.s2Vi; document.getElementById("v-s2-vv").innerText = ch.semi2.s2Vv;
+            document.getElementById("v-s2-lt").innerText = (parseInt(ch.semi2.s2Li)||0)+(parseInt(ch.semi2.s2Lv)||0);
+            document.getElementById("v-s2-vt").innerText = (parseInt(ch.semi2.s2Vi)||0)+(parseInt(ch.semi2.s2Vv)||0);
+
+            document.getElementById("render-f-l-name").innerText = ch.final.localName;
+            document.getElementById("render-f-v-name").innerText = ch.final.visitanteName;
+            document.getElementById("v-f-l").innerText = ch.final.golesL;
+            document.getElementById("v-f-v").innerText = ch.final.golesV;
+
+            // GOLEADORES
+            const tGoleadores = document.getElementById("render-tabla-goleadores");
+            tGoleadores.innerHTML = "";
+            const sortedScorers = [...coreDB.goleadores].sort((a,b) => b.goles - a.goles);
+            sortedScorers.forEach((sc, i) => {
+                tGoleadores.innerHTML += `<tr><td style="text-align:center; font-weight:bold; color:var(--accent-gold);">${i+1}</td><td>🏃‍♂️ ${sc.nombre}</td><td>${sc.equipo}</td><td style="text-align:center; font-weight:bold; font-size:1.1rem; color:var(--accent-cyan);">${sc.goles}</td></tr>`;
+            });
+
+            // ROSTERS
+            const gridRosters = document.getElementById("render-roster-grid");
+            gridRosters.innerHTML = "";
+            coreDB.equipos.forEach(eq => {
+                gridRosters.innerHTML += `<div class="roster-card"><div class="roster-team-head">${parseShield(eq.escudo)} <span>${eq.nombre}</span></div><div style="font-size:0.85rem; line-height:1.6;">${eq.lista}</div></div>`;
+            });
+
+            // KPIS
+            document.getElementById("kpi-goles").innerText = totalGoles;
+            document.getElementById("kpi-pj").innerText = `${partidosJugados}/6`;
+            document.getElementById("kpi-fase").innerText = coreDB.champions.fase;
+            document.getElementById("kpi-pichichi").innerText = sortedScorers[0] ? sortedScorers[0].nombre : "N/A";
+        }
+
+        // CONTROL ACCEDER ADMIN
+        function unlockAdmin() {
+            if(document.getElementById("pass-key").value === "wheatley10") {
+                document.getElementById("auth-box").style.display = "none";
+                document.getElementById("admin-controls-panel").style.display = "grid";
+                renderEditorInputs();
+            } else { alert("Clave Incorrecta"); }
+        }
+
+        function renderEditorInputs() {
+            const container = document.getElementById("render-inputs-editor");
+            container.innerHTML = "";
+            coreDB.equipos.forEach(eq => {
+                container.innerHTML += `<div class="team-edit-box"><input type="text" id="edit-name-${eq.id}" value="${eq.nombre}"><input type="text" id="edit-shield-${eq.id}" value="${eq.escudo}"><textarea id="edit-list-${eq.id}" rows="2">${eq.lista}</textarea></div>`;
+            });
+        }
+
+        function updateTeamsData() {
+            coreDB.equipos.forEach(eq => {
+                eq.nombre = document.getElementById(`edit-name-${eq.id}`).value || eq.nombre;
+                eq.escudo = document.getElementById(`edit-shield-${eq.id}`).value || "🛡️";
+                eq.lista = document.getElementById(`edit-list-${eq.id}`).value;
+            });
+            saveAndSync();
+            alert("Equipos actualizados en toda la red.");
+        }
+
+        // GOLEADORES ENGINE
+        function addOrUpdateScorer() {
+            const name = document.getElementById("scorer-name").value.trim();
+            const team = document.getElementById("scorer-team-select").value;
+            if(!name) return alert("Escribe un nombre");
+
+            let pichichi = coreDB.goleadores.find(g => g.nombre.toLowerCase() === name.toLowerCase());
+            if(pichichi) {
+                pichichi.goles++;
+            } else {
+                coreDB.goleadores.push({ nombre: name, equipo: team, goles: 1 });
+            }
+            document.getElementById("scorer-name").value = "";
+            saveAndSync();
+        }
+
+        function saveResultLiga() {
+            const id = parseInt(document.getElementById("select-partido-liga").value);
+            const gl = parseInt(document.getElementById("g-local-liga").value);
+            const gv = parseInt(document.getElementById("g-vis-liga").value);
+            if(isNaN(gl) || isNaN(gv)) return alert("Pon números");
+            
+            const p = coreDB.partidosLiga.find(x => x.id === id);
+            p.golesL = gl; p.golesV = gv; p.estado = "Terminado";
+            
+            recalcularLiga();
+            saveAndSync();
+        }
+
+        function recalcularLiga() {
+            coreDB.equipos.forEach(e => { e.pj=0; e.g=0; e.e=0; e.p=0; e.gf=0; e.gc=0; e.dg=0; e.pts=0; });
+            coreDB.partidosLiga.forEach(p => {
+                if(p.estado === "Terminado") {
+                    const l = coreDB.equipos.find(e => e.id === p.local);
+                    const v = coreDB.equipos.find(e => e.id === p.visitante);
+                    l.pj++; v.pj++; l.gf += p.golesL; l.gc += p.golesV; v.gf += p.golesV; v.gc += p.golesL;
+                    if(p.golesL > p.golesV) { l.g++; l.pts += 3; v.p++; }
+                    else if(p.golesV > p.golesL) { v.g++; v.pts += 3; l.p++; }
+                    else { l.e++; v.e++; l.pts += 1; v.pts += 1; }
+                    l.dg = l.gf - l.gc; v.dg = v.gf - v.gc;
+                }
+            });
+        }
+
+        function generarCrucesChampions() {
+            const sorted = [...coreDB.equipos].sort((a,b) => b.pts - a.pts || b.dg - a.dg);
+            coreDB.champions.fase = "Playoffs";
+            coreDB.champions.semi1.localId = sorted[0].id; coreDB.champions.semi1.visitanteId = sorted[3].id;
+            coreDB.champions.semi2.localId = sorted[1].id; coreDB.champions.semi2.visitanteId = sorted[2].id;
+            saveAndSync();
+            switchView("playoffs");
+        }
+
+        function saveResultKO() {
+            const tipo = document.getElementById("select-ronda-ko").value;
+            const gl = parseInt(document.getElementById("g-local-ko").value);
+            const gv = parseInt(document.getElementById("g-vis-ko").value);
+            if(isNaN(gl) || isNaN(gv)) return alert("Pon números");
+
+            const ch = coreDB.champions;
+            if (tipo === "s1-i") { ch.semi1.s1Li = gl; ch.semi1.s1Vi = gv; }
+            if (tipo === "s1-v") { ch.semi1.s1Lv = gv; ch.semi1.s1Vv = gl; }
+            if (tipo === "s2-i") { ch.semi2.s2Li = gl; ch.semi2.s2Vi = gv; }
+            if (tipo === "s2-v") { ch.semi2.s2Lv = gv; ch.semi2.s2Vv = gl; }
+            if (tipo === "final") { ch.final.golesL = gl; ch.final.golesV = gv; }
+
+            // Autocalcular finalistas
+            const s1l = coreDB.equipos.find(e => e.id === ch.semi1.localId);
+            const s1v = coreDB.equipos.find(e => e.id === ch.semi1.visitanteId);
+            if(ch.semi1.s1Lv !== "-" && s1l && s1v) {
+                ch.final.localName = ((parseInt(ch.semi1.s1Li)||0)+(parseInt(ch.semi1.s1Lv)||0)) > ((parseInt(ch.semi1.s1Vi)||0)+(parseInt(ch.semi1.s1Vv)||0)) ? s1l.nombre : s1v.nombre;
+            }
+            const s2l = coreDB.equipos.find(e => e.id === ch.semi2.localId);
+            const s2v = coreDB.equipos.find(e => e.id === ch.semi2.visitanteId);
+            if(ch.semi2.s2Lv !== "-" && s2l && s2v) {
+                ch.final.visitanteName = ((parseInt(ch.semi2.s2Li)||0)+(parseInt(ch.semi2.s2Lv)||0)) > ((parseInt(ch.semi2.s2Vi)||0)+(parseInt(ch.semi2.s2Vv)||0)) ? s2l.nombre : s2v.nombre;
+            }
+
+            saveAndSync();
+        }
+
+        renderEngine();
+    </script>
+</body>
+</html>

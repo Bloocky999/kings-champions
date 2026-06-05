@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FotMob Premium - Kings Elite Tracker</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        :root {
+            --bg-main: #080a10;
+            --bg-surface: #111622;
+            --bg-row-hover: #192030;
+            --bg-badge: #20293a;
+            --border-color: #1e2638;
+            --text-primary: #ffffff;
+            --text-secondary: #8a96a8;
+            --text-muted: #576375;
+            --fotmob-green: #00e676;
+            --fotmob-red: #ff3b30;
+            --fotmob-amber: #ffcc00;
+            --fotmob-blue: #1d4ed8;
+        }
+
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .app-container {
+            max-width: 1000px; margin: 0 auto; padding: 24px 16px; box-sizing: border-box;
+        }
+
+        header {
+            display: flex; justify-content: space-between; align-items: center;
+            padding-bottom: 20px; border-bottom: 1px solid var(--border-color); margin-bottom: 24px;
+        }
+
+        .brand h1 { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; }
+        .brand p { margin: 4px 0 0 0; color: var(--text-secondary); font-size: 0.85rem; }
+
+        .header-right { display: flex; align-items: center; gap: 12px; }
+        #sync-status {
+            font-size: 0.75rem; font-weight: 700; padding: 6px 14px; border-radius: 20px;
+            background: var(--bg-surface); border: 1px solid var(--border-color);
+        }
+        .status-disconnected { color: var(--fotmob-red); }
+        .status-connected { color: var(--fotmob-green); }
+
+        .btn-gear-secret {
+            background: transparent; border: none; font-size: 1.2rem; cursor: pointer; opacity: 0.5; color: #fff; transition: opacity 0.2s;
+        }
+        .btn-gear-secret:hover { opacity: 1; }
+
+        /* NAV TABS */
+        .main-nav { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 28px; overflow-x: auto; }
+        .tab-btn {
+            background: transparent; border: none; color: var(--text-secondary);
+            padding: 14px 2px; font-size: 0.95rem; font-weight: 700; cursor: pointer;
+            position: relative; white-space: nowrap; transition: color 0.2s;
+        }
+        .tab-btn:hover { color: var(--text-primary); }
+        .tab-btn.active { color: var(--fotmob-green); }
+        .tab-btn.active::after {
+            content: ""; position: absolute; bottom: -1px; left: 0; right: 0; height: 3px; background-color: var(--fotmob-green); border-radius: 3px;
+        }
+
+        .view-pane { display: none; }
+        .view-pane.active { display: block; }
+
+        /* CONTENEDORES Y TARJETAS FOTMOB */
+        .section-container { background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 14px; overflow: hidden; margin-bottom: 24px; }
+        .section-title { padding: 18px 20px; margin: 0; font-size: 0.85rem; font-weight: 800; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.8px; }
+
+        /* LISTA DE PARTIDOS */
+        .match-group-label { background: var(--bg-main); padding: 8px 20px; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; border-bottom: 1px solid var(--border-color); }
+        .match-row-item { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border-color); transition: background-color 0.15s; cursor: pointer; }
+        .match-row-item:last-child { border-bottom: none; }
+        .match-row-item:hover { background-color: var(--bg-row-hover); }
+
+        .m-team { display: flex; align-items: center; gap: 12px; font-size: 0.95rem; font-weight: 600; width: 42%; }
+        .m-team.left-side { flex-direction: row-reverse; text-align: right; }
+        .shield-container { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+        .shield-container img { width: 100%; height: 100%; object-fit: contain; }
+
+        .m-center-score-block { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 16%; }
+        .score-box { background: var(--bg-badge); padding: 6px 14px; border-radius: 6px; font-size: 0.95rem; font-weight: 800; min-width: 44px; text-align: center; }
+        .score-box.live { color: var(--fotmob-green); border: 1px solid rgba(0, 230, 118, 0.3); background: rgba(0, 230, 118, 0.05); }
+        .score-box.pending { color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; }
+        .live-dot-text { font-size: 0.65rem; color: var(--fotmob-red); font-weight: 800; margin-top: 4px; text-transform: uppercase; animation: pulse 1.2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+        /* TABLAS */
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { padding: 14px 20px; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); border-bottom: 1px solid var(--border-color); text-transform: uppercase; }
+        td { padding: 16px 20px; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); }
+        tr:last-child td { border-bottom: none; }
+        tr:hover td { background-color: var(--bg-row-hover); }
+        .table-pos { color: var(--text-muted); font-weight: 700; margin-right: 10px; width: 18px; display: inline-block; }
+        .pts-bold { font-weight: 800; color: var(--fotmob-green); }
+
+        .streak-flex { display: flex; gap: 5px; }
+        .streak-pill { width: 20px; height: 20px; border-radius: 5px; font-size: 0.7rem; font-weight: 800; display: flex; align-items: center; justify-content: center; color: #fff; }
+        .sp-g { background: var(--fotmob-green); color: #000; }
+        .sp-e { background: var(--bg-badge); color: var(--text-secondary); }
+        .sp-p { background: var(--fotmob-red); }
+
+        /* MODAL HOJA DE PARTIDO */
+        .modal-backdrop { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(5px); z-index: 3000; justify-content: center; align-items: center; padding: 16px; box-sizing: border-box; }
+        .modal-content { background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 18px; max-width: 550px; width: 100%; padding: 28px; box-sizing: border-box; position: relative; animation: slideUp 0.2s ease-out; }
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .modal-close { position: absolute; top: 20px; right: 20px; background: transparent; border: none; color: var(--text-secondary); font-size: 1.3rem; cursor: pointer; }
+        .modal-match-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 24px; margin-bottom: 24px; }
+        .lineups-container { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+        .lineup-column h4 { margin: 0 0 14px 0; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; }
+        .player-item { padding: 10px 0; border-bottom: 1px dashed var(--border-color); font-size: 0.9rem; font-weight: 500; display: flex; align-items: center; gap: 8px; }
+
+        /* ADMIN ZONE */
+        .admin-zone { display: none; border: 1px solid #4f46e5; background: #0b0f19; margin-top: 32px; }
+        .admin-navbar { display: flex; gap: 10px; padding: 16px; background: #131929; border-bottom: 1px solid var(--border-color); overflow-x: auto; }
+        .admin-nav-btn { background: var(--bg-badge); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 10px 18px; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        .admin-nav-btn.active { background: #4f46e5; color: #fff; border-color: transparent; }
+        .admin-tab-content { display: none; padding: 20px; }
+        .admin-tab-content.active { display: block; }
+        
+        .form-group { margin-bottom: 16px; }
+        label { display: block; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 6px; font-weight: 700; text-transform: uppercase; }
+        input, select, textarea { background: var(--bg-main); border: 1px solid var(--border-color); color: #fff; padding: 12px; border-radius: 8px; font-size: 0.9rem; width: 100%; box-sizing: border-box; }
+        input:focus, select:focus, textarea:focus { border-color: #4f46e5; outline: none; }
+        
+        .btn-action { background: #4f46e5; color: #fff; border: none; padding: 14px; font-weight: 700; border-radius: 8px; cursor: pointer; width: 100%; text-transform: uppercase; font-size: 0.85rem; transition: background 0.2s; }
+        .btn-action:hover { background: #4338ca; }
+        .btn-danger { background: var(--fotmob-red); }
+        .btn-danger:hover { background: #cc241b; }
+        .btn-secondary { background: var(--bg-badge); color: var(--text-secondary); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { background: var(--bg-row-hover); color: #fff; }
+
+        .team-manage-row { display: flex; justify-content: space-between; align-items: center; background: var(--bg-main); padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 8px; transition: all 0.2s; }
+        .team-manage-row.is-editing { border-color: #4f46e5; background: rgba(79, 70, 229, 0.12); box-shadow: 0 0 12px rgba(79, 70, 229, 0.25); }
+        
+        .stats-split { display: grid; grid-template-columns: 1fr 320px; gap: 24px; }
+        @media(max-width: 768px) { .stats-split { grid-template-columns: 1fr; } }
+
+        .mini-list-item { display: flex; justify-content: space-between; align-items: center; background: var(--bg-main); padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; font-size: 0.85rem; border: 1px solid var(--border-color); }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <header>
+            <div class="brand">
+                <h1 id="dyn-title">KINGS ELITE CHAMPIONS</h1>
+                <p id="dyn-subtitle">Cargando formato de torneo...</p>
+            </div>
+            <div class="header-right">
+                <div id="sync-status" class="status-disconnected">Desconectado</div>
+                <button class="btn-gear-secret" onclick="triggerAdminPanel()">⚙️ Operación</button>
+            </div>
+        </header>
+
+        <nav class="main-nav">
+            <button class="tab-btn active" id="tab-matches" onclick="switchView('matches')">Partidos</button>
+            <button class="tab-btn" id="tab-liga" onclick="switchView('liga')">Clasificación</button>
+            <button class="tab-btn" id="tab-scorers" onclick="switchView('scorers')">Estadísticas</button>
+        </nav>
+
+        <!-- PANELES DE VISTA -->
+        <div id="view-matches" class="view-pane active">
+            <div class="section-container" id="render-partidos-container"></div>
+        </div>
+
+        <div id="view-liga" class="view-pane">
+            <div class="section-container">
+                <h2 class="section-title">Tabla de Posiciones</h2>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Equipo</th>
+                                <th style="text-align:center;">PJ</th>
+                                <th style="text-align:center;">G</th>
+                                <th style="text-align:center;">E</th>
+                                <th style="text-align:center;">P</th>
+                                <th style="text-align:center;">GF</th>
+                                <th style="text-align:center;">GC</th>
+                                <th style="text-align:center;">DG</th>
+                                <th style="text-align:center;">Forma</th>
+                                <th style="text-align:center;">PTS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="render-tabla-liga"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-scorers" class="view-pane">
+            <div class="stats-split">
+                <div class="section-container">
+                    <h2 class="section-title">Goleadores</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:50px; text-align:center;">#</th>
+                                <th>Jugador</th>
+                                <th>Club</th>
+                                <th style="text-align:center;">Goles</th>
+                            </tr>
+                        </thead>
+                        <tbody id="render-tabla-goleadores"></tbody>
+                    </table>
+                </div>
+                <div class="section-container" style="background: linear-gradient(180deg, #161224, var(--bg-surface)); text-align:center; padding:30px 20px; border-color:#3b2a54;">
+                    <div style="color:var(--fotmob-amber); font-size:0.75rem; font-weight:800; letter-spacing:1px; text-transform:uppercase;">Jugador del Torneo</div>
+                    <div style="font-size:3rem; margin:15px 0;">🏆</div>
+                    <h3 style="margin:0; font-size:1.4rem; font-weight:800;" id="render-mvp-name">-</h3>
+                    <p style="color:var(--text-secondary); font-size:0.9rem; margin:6px 0 0 0;" id="render-mvp-team">Sin asignar</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL DETALLE PARTIDO -->
+        <div id="match-details-modal" class="modal-backdrop" onclick="closeMatchModal()">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <button class="modal-close" onclick="closeMatchModal()">✕</button>
+                <div class="modal-match-header" id="modal-match-header-content"></div>
+                <div class="lineups-container">
+                    <div>
+                        <h4 id="modal-local-team-title">-</h4>
+                        <div id="modal-local-lineup"></div>
+                    </div>
+                    <div style="text-align: right;">
+                        <h4 id="modal-visitor-team-title">-</h4>
+                        <div id="modal-visitor-lineup"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL DE CONTROL ADMINISTRADOR -->
+        <div class="section-container admin-zone" id="admin-main-panel">
+            <h2 class="section-title" style="color:#818cf8; border-color:#312e81;">🔒 Centro de Control Estructurado</h2>
+            
+            <div id="auth-box" style="padding:20px; display:flex; gap:12px;">
+                <input type="password" id="pass-key" placeholder="Código de acceso organizador...">
+                <button onclick="unlockAdmin()" class="btn-action" style="width:auto; padding:0 30px;">Entrar</button>
+            </div>
+
+            <div id="admin-interactive-area" style="display: none;">
+                <div class="admin-navbar">
+                    <button class="admin-nav-btn active" id="anb-config" onclick="switchAdminTab('config')">1. Configurar Formato</button>
+                    <button class="admin-nav-btn" id="anb-equipos" onclick="switchAdminTab('equipos')">2. Configurar Equipos</button>
+                    <button class="admin-nav-btn" id="anb-actas" onclick="switchAdminTab('actas')">3. Introducir Resultados</button>
+                    <button class="admin-nav-btn" id="anb-premios" onclick="switchAdminTab('premios')">4. Goleadores y MVP</button>
+                </div>
+
+                <!-- TAB: FORMATO -->
+                <div class="admin-tab-content active" id="atc-config">
+                    <div class="form-group">
+                        <label>Tipo de Competición</label>
+                        <select id="cfg-formato">
+                            <option value="liga_ko">Liga Regular + Eliminatoria Final</option>
+                            <option value="solo_liga">Solo Liga Regular (Todos contra todos)</option>
+                            <option value="solo_ko">Solo Eliminatoria Directa (Playoffs Directos)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Formato de las Eliminatorias Directas</label>
+                        <select id="cfg-ko-style">
+                            <option value="unico">Partido Único (Muerte súbita)</option>
+                            <option value="doble">Doble Partido (Ida y Vuelta)</option>
+                        </select>
+                    </div>
+                    <div style="background: rgba(239,68,68,0.1); border:1px solid rgba(239,68,68,0.2); padding:14px; border-radius:8px; margin-bottom:16px; font-size:0.8rem; color:var(--text-secondary);">
+                        ⚠️ Al presionar el botón de abajo se **borrarán los marcadores actuales** y se generará el calendario nuevo adaptado a los equipos inscritos.
+                    </div>
+                    <button class="btn-action" style="background:#10b981; margin-bottom: 20px;" onclick="procesarEstructuraTorneo()">⚡ Generar / Reiniciar Calendario Oficial</button>
+                    
+                    <hr style="border-color: var(--border-color); margin: 20px 0;">
+                    <div class="form-group">
+                        <label style="color: var(--fotmob-red);">Zona Peligrosa / Mantenimiento</label>
+                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin: 4px 0 12px 0;">Si deseas limpiar absolutamente todo el historial, configuraciones, equipos inscritos y empezar una copa completamente limpia de raíz:</p>
+                        <button class="btn-action btn-danger" style="width: auto; padding: 10px 20px; font-size: 0.8rem;" onclick="reinicioMaestroAbsoluto()">⚠️ Ejecutar Reinicio Maestro</button>
+                    </div>
+                </div>
+
+                <!-- TAB: EQUIPOS -->
+                <div class="admin-tab-content" id="atc-equipos">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+                        <div>
+                            <h4 id="form-equipo-titulo">Inscribir Nuevo Equipo</h4>
+                            <div class="form-group"><label>Nombre del Club</label><input type="text" id="add-eq-name" placeholder="Ej: Real Madrid"></div>
+                            <div class="form-group"><label>Icono/Escudo (Emoji o URL)</label><input type="text" id="add-eq-shield" value="🛡️"></div>
+                            <div class="form-group"><label>Plantilla de Jugadores (Separados por comas)</label><textarea id="add-eq-list" placeholder="Jugador 1, Jugador 2, Jugador 3..."></textarea></div>
+                            <div style="display:flex; gap:10px;">
+                                <button class="btn-action" id="btn-guardar-equipo" onclick="guardarEquipo()">Inscribir Equipo</button>
+                                <button class="btn-action btn-secondary" id="btn-cancelar-edicion" onclick="cancelarEdicionEquipo()" style="display:none;">Cancelar</button>
+                            </div>
+                        </div>
+                        <div>
+                            <h4>Clubes Inscritos (<span id="admin-team-count">0</span>)</h4>
+                            <div id="admin-lista-equipos" style="max-height:360px; overflow-y:auto;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB: INTRODUCIR RESULTADOS -->
+                <div class="admin-tab-content" id="atc-actas">
+                    <div class="form-group">
+                        <label>Seleccionar Partido del Calendario</label>
+                        <select id="actas-partido-select"></select>
+                    </div>
+                    <div style="display:flex; gap:16px; margin-bottom:16px;">
+                        <div style="flex:1;"><label>Goles Local</label><input type="number" id="actas-gl"></div>
+                        <div style="flex:1;"><label>Goles Visitante</label><input type="number" id="actas-gv"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>Estado del Encuentro</label>
+                        <select id="actas-estado">
+                            <option value="Pendiente">Pendiente</option>
+                            <option value="Jugándose">¡EN VIVO!</option>
+                            <option value="Terminado">Terminado</option>
+                        </select>
+                    </div>
+                    <button class="btn-action" onclick="guardarActaPartido()">Registrar Marcador</button>
+                </div>
+
+                <!-- TAB: PREMIOS -->
+                <div class="admin-tab-content" id="atc-premios">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+                        <div>
+                            <h4>Registrar Anotación</h4>
+                            <div class="form-group">
+                                <label>1. Club del Goleador</label>
+                                <select id="sc-team-select" onchange="actualizarDatalistGoleadores()"></select>
+                            </div>
+                            <div class="form-group">
+                                <label>2. Nombre del Goleador (Sugerencias dinámicas)</label>
+                                <input type="text" id="sc-name" list="squad-autocomplete" placeholder="Escribe o selecciona...">
+                                <datalist id="squad-autocomplete"></datalist>
+                            </div>
+                            <button class="btn-action" style="background:#10b981; margin-bottom: 24px;" onclick="sumarGol()">(+) Añadir Gol al Historial</button>
+                            
+                            <h4>Historial / Corregir Errores</h4>
+                            <div id="admin-goleadores-listado" style="max-height: 180px; overflow-y: auto;"></div>
+                        </div>
+                        <div>
+                            <h4>Asignar MVP del Torneo</h4>
+                            <div class="form-group">
+                                <label>1. Club del Jugador</label>
+                                <select id="mvp-team-select" onchange="actualizarDatalistMvp()"></select>
+                            </div>
+                            <div class="form-group">
+                                <label>2. Nombre del Jugador</label>
+                                <input type="text" id="mvp-name-input" list="mvp-autocomplete" placeholder="Escribe o selecciona...">
+                                <datalist id="mvp-autocomplete"></datalist>
+                            </div>
+                            <button class="btn-action" style="background:var(--fotmob-amber); color:#000;" onclick="establecerMvp()">Guardar MVP Oficial</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const MQTT_TOPIC = "kings_elite_champions/torneo_data_v2_barcelona";
+        const mqttClient = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
+
+        const defaultDB = {
+            config: { formato: "liga_ko", koStyle: "unico" },
+            equipos: [
+                { id: 1, nombre: "Los Mayores FC", escudo: "👑", lista: "Wheatley, Dani, Carlos, Miki, Javi", pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0, racha: [] },
+                { id: 2, nombre: "Dream Team Barrio", escudo: "⚡", lista: "Soto, Andrés, Kike, Nacho, Pibe", pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0, racha: [] },
+                { id: 3, nombre: "Pequeños Promesas", escudo: "💎", lista: "Nico, Lucas, Hugo, Rafa", pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0, racha: [] },
+                { id: 4, nombre: "Sporting Cachorros", escudo: "🔥", lista: "Samu, Leo, Gabi, Izan, Tomi", pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0, racha: [] }
+            ],
+            partidos: [],
+            goleadores: [],
+            mvp: { nombre: "Por definir", equipo: "N/A" }
+        };
+
+        let coreDB = JSON.parse(JSON.stringify(defaultDB));
+        let idEquipoEditando = null; 
+
+        if (localStorage.getItem("kings_elite_db_v2")) {
+            coreDB = JSON.parse(localStorage.getItem("kings_elite_db_v2"));
+        } else {
+            localStorage.setItem("kings_elite_db_v2", JSON.stringify(coreDB));
+        }
+
+        mqttClient.on('connect', () => {
+            const ind = document.getElementById("sync-status");
+            ind.innerText = "Sincronizado (Servidor)"; ind.className = "status-connected";
+            mqttClient.subscribe(MQTT_TOPIC);
+        });
+        mqttClient.on('close', () => {
+            const ind = document.getElementById("sync-status");
+            ind.innerText = "Modo Local"; ind.className = "status-disconnected";
+        });
+        mqttClient.on('message', (topic, message) => {
+            if (topic === MQTT_TOPIC) {
+                try {
+                    coreDB = JSON.parse(message.toString());
+                    localStorage.setItem("kings_elite_db_v2", JSON.stringify(coreDB));
+                    renderEngine();
+                    if(document.getElementById("admin-interactive-area").style.display === "block") {
+                        syncAdminSelectors();
+                    }
+                } catch (e) { console.error("Error parseando actualización remota", e); }
+            }
+        });
+
+        function saveAndSync() {
+            localStorage.setItem("kings_elite_db_v2", JSON.stringify(coreDB));
+            renderEngine();
+            mqttClient.publish(MQTT_TOPIC, JSON.stringify(coreDB), { qos: 1, retain: true });
+        }
+
+        function switchView(view) {
+            document.querySelectorAll('.view-pane').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`view-${view}`).classList.add('active');
+            document.getElementById(`tab-${view}`).classList.add('active');
+        }
+
+        function switchAdminTab(tab) {
+            document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.admin-nav-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`atc-${tab}`).classList.add('active');
+            document.getElementById(`anb-${tab}`).classList.add('active');
+            if(tab === 'premios') { actualizarDatalistGoleadores(); actualizarDatalistMvp(); }
+        }
+
+        function triggerAdminPanel() {
+            const p = document.getElementById("admin-main-panel");
+            p.style.display = (p.style.display === "block") ? "none" : "block";
+            if(p.style.display === "block") p.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function unlockAdmin() {
+            if(document.getElementById("pass-key").value === "wheatley10") {
+                document.getElementById("auth-box").style.display = "none";
+                document.getElementById("admin-interactive-area").style.display = "block";
+                syncAdminSelectors();
+            } else { alert("Clave de acceso incorrecta."); }
+        }
+
+        function parseShield(shieldStr) {
+            if (!shieldStr) return `<div class="shield-container">🛡️</div>`;
+            if (shieldStr.startsWith('http') || shieldStr.startsWith('data:image')) {
+                return `<div class="shield-container"><img src="${shieldStr}"></div>`;
+            }
+            return `<div class="shield-container">${shieldStr}</div>`;
+        }
+
+        function reinicioMaestroAbsoluto() {
+            if(confirm("💥 ¡ALERTA CRÍTICA! Esto borrará todos los equipos, tablas, marcadores y configuraciones tanto locales como del servidor remoto de forma irreversible. ¿Proceder?")) {
+                coreDB = { config: { formato: "liga_ko", koStyle: "unico" }, equipos: [], partidos: [], goleadores: [], mvp: { nombre: "Por definir", equipo: "N/A" } };
+                cancelarEdicionEquipo();
+                syncAdminSelectors();
+                saveAndSync();
+                alert("Base de datos completamente formateada.");
+            }
+        }
+
+        // --- ALGORITMOS DINÁMICOS DE TORNEO ---
+        function algoritmoRoundRobin(equiposIds) {
+            let list = [...equiposIds];
+            if (list.length % 2 !== 0) list.push(null); 
+            let rounds = list.length - 1;
+            let matchesPerRound = list.length / 2;
+            let partidos = [];
+            
+            for (let round = 0; round < rounds; round++) {
+                for (let match = 0; match < matchesPerRound; match++) {
+                    let home = list[match];
+                    let away = list[list.length - 1 - match];
+                    if (home !== null && away !== null) {
+                        partidos.push({
+                            id: Date.now() + Math.random(),
+                            local: round % 2 === 1 ? away : home,
+                            visitante: round % 2 === 1 ? home : away,
+                            golesL: "-", golesV: "-",
+                            estado: "Pendiente",
+                            fase: "Liga Regular",
+                            instancia: `Jornada ${round + 1}`
+                        });
+                    }
+                }
+                list.splice(1, 0, list.pop());
+            }
+            return partidos;
+        }
+
+        function generarPlayoffsDirectos(equiposIds, isDoble) {
+            let partidos = [];
+            let count = equiposIds.length;
+            let nMatches = Math.floor(count / 2);
+            
+            for(let i=0; i<nMatches; i++) {
+                let loc = equiposIds[i];
+                let vis = equiposIds[count - 1 - i];
+                
+                if(isDoble) {
+                    partidos.push({ id: Date.now()+Math.random(), local: loc, visitante: vis, golesL: "-", golesV: "-", estado: "Pendiente", fase: "Playoffs", instancia: "Eliminatoria - Ida" });
+                    partidos.push({ id: Date.now()+Math.random(), local: vis, visitante: loc, golesL: "-", golesV: "-", estado: "Pendiente", fase: "Playoffs", instancia: "Eliminatoria - Vuelta" });
+                } else {
+                    partidos.push({ id: Date.now()+Math.random(), local: loc, visitante: vis, golesL: "-", golesV: "-", estado: "Pendiente", fase: "Playoffs", instancia: "Eliminatoria Final" });
+                }
+            }
+            return partidos;
+        }
+
+        function procesarEstructuraTorneo() {
+            const form = document.getElementById("cfg-formato").value;
+            const style = document.getElementById("cfg-ko-style").value;
+            coreDB.config.formato = form;
+            coreDB.config.koStyle = style;
+
+            const ids = coreDB.equipos.map(e => e.id);
+            if(ids.length < 2) return alert("Se necesitan al menos 2 equipos para armar la competición.");
+
+            coreDB.partidos = [];
+            
+            if (form === "solo_liga") {
+                coreDB.partidos = algoritmoRoundRobin(ids);
+            } else if (form === "solo_ko") {
+                coreDB.partidos = generarPlayoffsDirectos(ids, style === "doble");
+            } else if (form === "liga_ko") {
+                coreDB.partidos = algoritmoRoundRobin(ids);
+            }
+            
+            recalcularClasificacion();
+            saveAndSync();
+            alert("Calendario del torneo regenerado con éxito.");
+        }
+
+        // --- GESTIÓN CRUD EQUIPOS ---
+        function guardarEquipo() {
+            const name = document.getElementById("add-eq-name").value.trim();
+            const shield = document.getElementById("add-eq-shield").value.trim();
+            const list = document.getElementById("add-eq-list").value.trim();
+            if(!name) return alert("Ingresa el nombre del club");
+
+            if (idEquipoEditando === null) {
+                const nuevo = {
+                    id: Date.now(), nombre: name, escudo: shield || "🛡️", lista: list,
+                    pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0, racha: []
+                };
+                coreDB.equipos.push(nuevo);
+            } else {
+                const eq = coreDB.equipos.find(e => e.id === idEquipoEditando);
+                if(eq) {
+                    const nombreAntiguo = eq.nombre;
+                    eq.nombre = name;
+                    eq.escudo = shield || "🛡️";
+                    eq.lista = list;
+
+                    coreDB.goleadores.forEach(g => { if(g.equipo === nombreAntiguo) g.equipo = name; });
+                    if(coreDB.mvp.equipo === nombreAntiguo) coreDB.mvp.equipo = name;
+                }
+                cancelarEdicionEquipo();
+            }
+
+            document.getElementById("add-eq-name").value = "";
+            document.getElementById("add-eq-list").value = "";
+            syncAdminSelectors();
+            saveAndSync();
+        }
+
+        function activarModoEdicion(id) {
+            const eq = coreDB.equipos.find(e => e.id === id);
+            if(!eq) return;
+
+            idEquipoEditando = id;
+            document.getElementById("form-equipo-titulo").innerText = "Editar Club ✏️";
+            document.getElementById("add-eq-name").value = eq.nombre;
+            document.getElementById("add-eq-shield").value = eq.escudo;
+            document.getElementById("add-eq-list").value = eq.lista || "";
+            
+            document.getElementById("btn-guardar-equipo").innerText = "Guardar Cambios";
+            document.getElementById("btn-cancelar-edicion").style.display = "block";
+            
+            syncAdminSelectors(); // Refrescar para aplicar highlight visual
+        }
+
+        function cancelarEdicionEquipo() {
+            idEquipoEditando = null;
+            document.getElementById("form-equipo-titulo").innerText = "Inscribir Nuevo Equipo";
+            document.getElementById("add-eq-name").value = "";
+            document.getElementById("add-eq-shield").value = "🛡️";
+            document.getElementById("add-eq-list").value = "";
+            
+            document.getElementById("btn-guardar-equipo").innerText = "Inscribir Equipo";
+            document.getElementById("btn-cancelar-edicion").style.display = "none";
+            
+            syncAdminSelectors();
+        }
+
+        function eliminarEquipo(id) {
+            if(confirm("¿Eliminar este club por completo? Esto causará desajustes en partidos existentes.")) {
+                coreDB.equipos = coreDB.equipos.filter(e => e.id !== id);
+                if(idEquipoEditando === id) cancelarEdicionEquipo();
+                syncAdminSelectors();
+                saveAndSync();
+            }
+        }
+
+        // --- AUTOCOMPLETADOS Y PREMIOS ---
+        function actualizarDatalistGoleadores() {
+            const teamName = document.getElementById("sc-team-select").value;
+            const datalist = document.getElementById("squad-autocomplete");
+            datalist.innerHTML = "";
+            const eq = coreDB.equipos.find(e => e.nombre === teamName);
+            if(eq && eq.lista) {
+                eq.lista.split(',').map(p => p.trim()).forEach(player => {
+                    if(player) datalist.innerHTML += `<option value="${player}">`;
+                });
+            }
+        }
+
+        function actualizarDatalistMvp() {
+            const teamName = document.getElementById("mvp-team-select").value;
+            const datalist = document.getElementById("mvp-autocomplete");
+            datalist.innerHTML = "";
+            const eq = coreDB.equipos.find(e => e.nombre === teamName);
+            if(eq && eq.lista) {
+                eq.lista.split(',').map(p => p.trim()).forEach(player => {
+                    if(player) datalist.innerHTML += `<option value="${player}">`;
+                });
+            }
+        }
+
+        function syncAdminSelectors() {
+            document.getElementById("admin-team-count").innerText = coreDB.equipos.length;
+            const listaDiv = document.getElementById("admin-lista-equipos");
+            listaDiv.innerHTML = "";
+            coreDB.equipos.forEach(e => {
+                const isEditingClass = (e.id === idEquipoEditando) ? 'is-editing' : '';
+                listaDiv.innerHTML += `
+                <div class="team-manage-row ${isEditingClass}">
+                    <div>${parseShield(e.escudo)} <strong>${e.nombre}</strong></div>
+                    <div style="display:flex; gap:6px;">
+                        <button class="btn-action" style="padding:6px 12px; width:auto; font-size:0.75rem; background:var(--fotmob-blue);" onclick="activarModoEdicion(${e.id})">Editar</button>
+                        <button class="btn-action btn-danger" style="padding:6px 12px; width:auto; font-size:0.75rem;" onclick="eliminarEquipo(${e.id})">Quitar</button>
+                    </div>
+                </div>`;
+            });
+
+            const selActas = document.getElementById("actas-partido-select");
+            selActas.innerHTML = "";
+            coreDB.partidos.forEach(p => {
+                const el = coreDB.equipos.find(x => x.id === p.local);
+                const ev = coreDB.equipos.find(x => x.id === p.visitante);
+                if(el && ev) {
+                    selActas.innerHTML += `<option value="${p.id}">[${p.instancia}] ${el.nombre} vs ${ev.nombre}</option>`;
+                }
+            });
+
+            const scSel = document.getElementById("sc-team-select");
+            const mvpSel = document.getElementById("mvp-team-select");
+            const scPrevVal = scSel.value;
+            const mvpPrevVal = mvpSel.value;
+
+            scSel.innerHTML = ""; mvpSel.innerHTML = "";
+            coreDB.equipos.forEach(e => {
+                scSel.innerHTML += `<option value="${e.nombre}">${e.nombre}</option>`;
+                mvpSel.innerHTML += `<option value="${e.nombre}">${e.nombre}</option>`;
+            });
+
+            if(scPrevVal && coreDB.equipos.some(e => e.nombre === scPrevVal)) scSel.value = scPrevVal;
+            if(mvpPrevVal && coreDB.equipos.some(e => e.nombre === mvpPrevVal)) mvpSel.value = mvpPrevVal;
+
+            // Renderizar la lista de goleadores editables dentro de la administración
+            const adminGoleadoresDiv = document.getElementById("admin-goleadores-listado");
+            adminGoleadoresDiv.innerHTML = "";
+            if(coreDB.goleadores.length === 0) {
+                adminGoleadoresDiv.innerHTML = `<p style="font-size:0.8rem; color:var(--text-muted); margin:0;">No hay goles registrados todavía.</p>`;
+            } else {
+                [...coreDB.goleadores].sort((a,b) => b.goles - a.goles).forEach(g => {
+                    adminGoleadoresDiv.innerHTML += `
+                    <div class="mini-list-item">
+                        <span><strong>${g.nombre}</strong> (${g.equipo}) - ⚽ ${g.goles}</span>
+                        <button class="btn-action btn-danger" style="width:auto; padding:3px 8px; font-size:0.7rem;" onclick="quitarGoleadorActa('${g.nombre}')">🗑️</button>
+                    </div>`;
+                });
+            }
+        }
+
+        // --- ACTUALIZACIÓN DE RESULTADOS ---
+        function guardarActaPartido() {
+            const pId = parseFloat(document.getElementById("actas-partido-select").value);
+            const gl = parseInt(document.getElementById("actas-gl").value);
+            const gv = parseInt(document.getElementById("actas-gv").value);
+            const est = document.getElementById("actas-estado").value;
+            
+            if(isNaN(gl) || isNaN(gv)) return alert("Introduce datos numéricos en los goles.");
+
+            const p = coreDB.partidos.find(x => x.id === pId);
+            if(p) {
+                p.golesL = gl; p.golesV = gv; p.estado = est;
+                recalcularClasificacion();
+                saveAndSync();
+                alert("Acta de partido guardada de forma segura.");
+            }
+        }
+
+        function recalcularClasificacion() {
+            coreDB.equipos.forEach(e => { e.pj=0; e.g=0; e.e=0; e.p=0; e.gf=0; e.gc=0; e.dg=0; e.pts=0; e.racha=[]; });
+            coreDB.partidos.forEach(p => {
+                if(p.fase === "Liga Regular" && p.estado === "Terminado") {
+                    const l = coreDB.equipos.find(e => e.id === p.local);
+                    const v = coreDB.equipos.find(e => e.id === p.visitante);
+                    if(l && v) {
+                        l.pj++; v.pj++; l.gf += p.golesL; l.gc += p.golesV; v.gf += p.golesV; v.gc += p.golesL;
+                        if(p.golesL > p.golesV) { l.g++; l.pts += 3; v.p++; l.racha.push('G'); v.racha.push('P'); }
+                        else if(p.golesV > p.golesL) { v.g++; v.pts += 3; l.p++; v.racha.push('G'); l.racha.push('P'); }
+                        else { l.e++; v.e++; l.pts += 1; v.pts += 1; l.racha.push('E'); v.racha.push('E'); }
+                        l.dg = l.gf - l.gc; v.dg = v.gf - v.gc;
+                    }
+                }
+            });
+        }
+
+        function sumarGol() {
+            const name = document.getElementById("sc-name").value.trim();
+            const team = document.getElementById("sc-team-select").value;
+            if(!name) return alert("Indica el nombre del goleador");
+
+            let pl = coreDB.goleadores.find(g => g.nombre.toLowerCase() === name.toLowerCase());
+            if(pl) { pl.goles++; } else { coreDB.goleadores.push({ nombre: name, equipo: team, goles: 1 }); }
+            document.getElementById("sc-name").value = "";
+            syncAdminSelectors();
+            saveAndSync();
+        }
+
+        function quitarGoleadorActa(nombre) {
+            let pl = coreDB.goleadores.find(g => g.nombre === nombre);
+            if(pl) {
+                pl.goles--;
+                if(pl.goles <= 0) {
+                    coreDB.goleadores = coreDB.goleadores.filter(g => g.nombre !== nombre);
+                }
+                syncAdminSelectors();
+                saveAndSync();
+            }
+        }
+
+        function establecerMvp() {
+            const name = document.getElementById("mvp-name-input").value.trim();
+            const team = document.getElementById("mvp-team-select").value;
+            if(!name) return alert("Establece un nombre");
+            coreDB.mvp = { nombre: name, equipo: team };
+            document.getElementById("mvp-name-input").value = "";
+            saveAndSync();
+        }
+
+        // --- FICHA MODAL DE ALINEACIÓN ---
+        function openMatchDetails(matchId) {
+            const p = coreDB.partidos.find(x => x.id === matchId);
+            if(!p) return;
+            const el = coreDB.equipos.find(e => e.id === p.local);
+            const ev = coreDB.equipos.find(e => e.id === p.visitante);
+            if(!el || !ev) return;
+
+            let centerStr = `<div class="score-box pending">VS</div>`;
+            if(p.estado === "Terminado") centerStr = `<div class="score-box">${p.golesL} - ${p.golesV}</div>`;
+            if(p.estado === "Jugándose") {
+                centerStr = `<div class="m-center-score-block"><div class="score-box live">${p.golesL} - ${p.golesV}</div><span class="live-dot-text">● EN VIVO</span></div>`;
+            }
+
+            document.getElementById("modal-match-header-content").innerHTML = `
+                <div class="m-team left-side" style="width:44%;">${parseShield(el.escudo)} <strong>${el.nombre}</strong></div>
+                ${centerStr}
+                <div class="m-team" style="width:44%;">${parseShield(ev.escudo)} <strong>${ev.nombre}</strong></div>`;
+
+            document.getElementById("modal-local-team-title").innerText = el.nombre;
+            document.getElementById("modal-visitor-team-title").innerText = ev.nombre;
+
+            const renderPlayers = (playersStr, containerId, alignRight) => {
+                const box = document.getElementById(containerId); box.innerHTML = "";
+                const arr = playersStr ? playersStr.split(',').map(x => x.trim()).filter(x=>x) : [];
+                if(arr.length === 0) {
+                    box.innerHTML = `<div class="player-item" style="color:var(--text-muted)">No registrada</div>`;
+                } else {
+                    arr.forEach(pl => {
+                        box.innerHTML += `<div class="player-item" style="${alignRight ? 'justify-content:flex-end;' : ''}">
+                            ${alignRight ? `<span>${pl}</span> 🏃‍♂️` : `🏃‍♂️ <span>${pl}</span>`}
+                        </div>`;
+                    });
+                }
+            };
+
+            renderPlayers(el.lista, "modal-local-lineup", false);
+            renderPlayers(ev.lista, "modal-visitor-lineup", true);
+            document.getElementById("match-details-modal").style.display = "flex";
+        }
+
+        function closeMatchModal() { document.getElementById("match-details-modal").style.display = "none"; }
+
+        // --- INTERFAZ / MOTOR DE RENDERIZADO PRINCIPAL ---
+        function renderEngine() {
+            const fmt = coreDB.config.formato;
+            let txt = "Formato de Liga Regular";
+            if(fmt === "solo_ko") txt = `Eliminatorias Directas (${coreDB.config.koStyle === 'doble' ? 'Ida y Vuelta' : 'Partido Único'})`;
+            if(fmt === "liga_ko") txt = `Liga Regular + Eliminatorias (${coreDB.config.koStyle === 'doble' ? 'Ida y Vuelta' : 'Partido Único'})`;
+            document.getElementById("dyn-subtitle").innerText = txt;
+
+            if(fmt === "solo_ko") {
+                document.getElementById("tab-liga").style.display = "none";
+                if(document.getElementById("tab-liga").classList.contains("active")) switchView("matches");
+            } else {
+                document.getElementById("tab-liga").style.display = "block";
+            }
+
+            const containerPartidos = document.getElementById("render-partidos-container");
+            containerPartidos.innerHTML = "";
+
+            if(coreDB.partidos.length === 0) {
+                containerPartidos.innerHTML = `<div style="padding:40px; text-transform:uppercase; text-align:center; color:var(--text-muted); font-size:0.85rem; font-weight:700;">No hay partidos programados. Configura el torneo en el panel.</div>`;
+            } else {
+                let mapGrupos = {};
+                coreDB.partidos.forEach(p => {
+                    if(!mapGrupos[p.instancia]) mapGrupos[p.instancia] = [];
+                    mapGrupos[p.instancia].push(p);
+                });
+
+                for (let grupo in mapGrupos) {
+                    let seccion = document.createElement("div");
+                    seccion.className = "match-group-block";
+                    seccion.innerHTML = `<div class="match-group-label">${grupo}</div>`;
+                    
+                    mapGrupos[grupo].forEach(p => {
+                        const el = coreDB.equipos.find(x => x.id === p.local);
+                        const ev = coreDB.equipos.find(x => x.id === p.visitante);
+                        if(el && ev) {
+                            let centerStr = `<div class="score-box pending">VS</div>`;
+                            if(p.estado === "Terminado") centerStr = `<div class="score-box">${p.golesL} - ${p.golesV}</div>`;
+                            if(p.estado === "Jugándose") {
+                                centerStr = `<div class="m-center-score-block"><div class="score-box live">${p.golesL} - ${p.golesV}</div><span class="live-dot-text">● VIVO</span></div>`;
+                            }
+
+                            seccion.innerHTML += `
+                            <div class="match-row-item" onclick="openMatchDetails(${p.id})">
+                                <div class="m-team left-side">${parseShield(el.escudo)} <span>${el.nombre}</span></div>
+                                ${centerStr}
+                                <div class="m-team">${parseShield(ev.escudo)} <span>${ev.nombre}</span></div>
+                            </div>`;
+                        }
+                    });
+                    containerPartidos.appendChild(seccion);
+                }
+            }
+
+            const tbodyLiga = document.getElementById("render-tabla-liga");
+            tbodyLiga.innerHTML = "";
+            const sortedTeams = [...coreDB.equipos].sort((a,b) => b.pts - a.pts || b.dg - a.dg || b.gf - a.gf);
+            sortedTeams.forEach((eq, idx) => {
+                let rachaHtml = `<div class="streak-flex">`;
+                (eq.racha || []).slice(-4).forEach(r => {
+                    if(r === 'G') rachaHtml += `<span class="streak-pill sp-g">V</span>`;
+                    if(r === 'E') rachaHtml += `<span class="streak-pill sp-e">E</span>`;
+                    if(r === 'P') rachaHtml += `<span class="streak-pill sp-p">D</span>`;
+                });
+                if((eq.racha || []).length === 0) rachaHtml += `<span style="color:var(--text-muted); font-size:0.8rem;">-</span>`;
+                rachaHtml += `</div>`;
+
+                tbodyLiga.innerHTML += `<tr>
+                    <td><span class="table-pos">${idx+1}</span>${parseShield(eq.escudo)} <span style="font-weight:700; margin-left:6px;">${eq.nombre}</span></td>
+                    <td style="text-align:center;">${eq.pj}</td>
+                    <td style="text-align:center;">${eq.g}</td>
+                    <td style="text-align:center;">${eq.e}</td>
+                    <td style="text-align:center;">${eq.p}</td>
+                    <td style="text-align:center; color:var(--text-secondary);">${eq.gf}</td>
+                    <td style="text-align:center; color:var(--text-secondary);">${eq.gc}</td>
+                    <td style="text-align:center; font-weight:600;">${eq.dg > 0 ? '+'+eq.dg : eq.dg}</td>
+                    <td>${rachaHtml}</td>
+                    <td style="text-align:center;" class="pts-bold">${eq.pts}</td>
+                </tr>`;
+            });
+
+            const tbodyGoleadores = document.getElementById("render-tabla-goleadores");
+            tbodyGoleadores.innerHTML = "";
+            const sortedScorers = [...coreDB.goleadores].sort((a,b) => b.goles - a.goles);
+            sortedScorers.forEach((sc, idx) => {
+                tbodyGoleadores.innerHTML += `<tr>
+                    <td style="text-align:center; font-weight:700; color:var(--text-muted);">${idx+1}</td>
+                    <td style="font-weight:700;">${sc.nombre}</td>
+                    <td style="color:var(--text-secondary);">${sc.equipo}</td>
+                    <td style="text-align:center; font-weight:800; color:var(--fotmob-green);">${sc.goles}</td>
+                </tr>`;
+            });
+
+            document.getElementById("render-mvp-name").innerText = coreDB.mvp.nombre;
+            document.getElementById("render-mvp-team").innerText = coreDB.mvp.equipo;
+        }
+
+        renderEngine();
+    </script>
+</body>
+</html>

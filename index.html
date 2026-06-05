@@ -1,0 +1,1260 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FotMob Premium - Kings Elite Tracker Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        :root {
+            --bg-main: #080a10;
+            --bg-surface: #111622;
+            --bg-row-hover: #192030;
+            --bg-badge: #20293a;
+            --border-color: #1e2638;
+            --text-primary: #ffffff;
+            --text-secondary: #8a96a8;
+            --text-muted: #576375;
+            --fotmob-green: #00e676;
+            --fotmob-red: #ff3b30;
+            --fotmob-amber: #ffcc00;
+            --fotmob-blue: #1d4ed8;
+            --whatsapp-green: #25D366;
+        }
+
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .app-container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; box-sizing: border-box; }
+        header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; }
+        .brand h1 { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; }
+        .brand p { margin: 4px 0 0 0; color: var(--text-secondary); font-size: 0.85rem; }
+        .header-right { display: flex; align-items: center; gap: 12px; }
+        #sync-status { font-size: 0.75rem; font-weight: 700; padding: 6px 14px; border-radius: 20px; background: var(--bg-surface); border: 1px solid var(--border-color); }
+        .status-disconnected { color: var(--fotmob-red); }
+        .status-connected { color: var(--fotmob-green); }
+        .btn-gear-secret { background: transparent; border: none; font-size: 1.2rem; cursor: pointer; opacity: 0.5; color: #fff; transition: opacity 0.2s; }
+        .btn-gear-secret:hover { opacity: 1; }
+
+        .main-nav { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 28px; overflow-x: auto; }
+        .tab-btn { background: transparent; border: none; color: var(--text-secondary); padding: 14px 2px; font-size: 0.95rem; font-weight: 700; cursor: pointer; position: relative; white-space: nowrap; transition: color 0.2s; }
+        .tab-btn:hover { color: var(--text-primary); }
+        .tab-btn.active { color: var(--fotmob-green); }
+        .tab-btn.active::after { content: ""; position: absolute; bottom: -1px; left: 0; right: 0; height: 3px; background-color: var(--fotmob-green); border-radius: 3px; }
+
+        .view-pane { display: none; }
+        .view-pane.active { display: block; }
+        .section-container { background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 14px; overflow: hidden; margin-bottom: 24px; }
+        .section-title { padding: 18px 20px; margin: 0; font-size: 0.85rem; font-weight: 800; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.8px; }
+
+        /* PARTIDOS DETALLE AVANZADO */
+        .match-group-label { background: var(--bg-main); padding: 10px 20px; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; }
+        .match-row-item { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border-color); transition: background-color 0.15s; cursor: pointer; }
+        .match-row-item:hover { background-color: var(--bg-row-hover); }
+        .m-info-meta { font-size: 0.75rem; color: var(--text-muted); display: flex; flex-direction: column; width: 20%; gap: 2px; }
+        .m-team { display: flex; align-items: center; gap: 12px; font-size: 0.95rem; font-weight: 600; width: 32%; }
+        .m-team.left-side { flex-direction: row-reverse; text-align: right; }
+        .shield-container { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+        .shield-container img { width: 100%; height: 100%; object-fit: contain; }
+        .m-center-score-block { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 16%; }
+        .score-box { background: var(--bg-badge); padding: 6px 14px; border-radius: 6px; font-size: 0.95rem; font-weight: 800; min-width: 44px; text-align: center; }
+        .score-box.live { color: var(--fotmob-green); border: 1px solid rgba(0, 230, 118, 0.3); background: rgba(0, 230, 118, 0.05); }
+        .score-box.pending { color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; }
+        .live-dot-text { font-size: 0.65rem; color: var(--fotmob-red); font-weight: 800; margin-top: 4px; text-transform: uppercase; animation: pulse 1.2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { padding: 14px 20px; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); border-bottom: 1px solid var(--border-color); text-transform: uppercase; }
+        td { padding: 16px 20px; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); }
+        .table-pos { color: var(--text-muted); font-weight: 700; margin-right: 10px; width: 18px; display: inline-block; }
+        .pts-bold { font-weight: 800; color: var(--fotmob-green); }
+
+        /* INTERFAZ COMUNIDAD ESTILOS */
+        .link-card { display: flex; align-items: center; justify-content: space-between; background: var(--bg-main); border: 1px solid var(--border-color); padding: 14px 18px; border-radius: 10px; text-decoration: none; color: #fff; font-weight: 700; font-size: 0.9rem; margin-bottom: 10px; transition: background 0.2s, border-color 0.2s; }
+        .link-card:hover { background: var(--bg-row-hover); border-color: var(--fotmob-green); }
+        
+        .poll-option-box { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; margin-bottom: 10px; cursor: pointer; position: relative; overflow: hidden; transition: border-color 0.2s; }
+        .poll-option-box:hover { border-color: #4f46e5; }
+        .poll-option-box.voted-disabled { cursor: default; border-color: var(--border-color); }
+        .poll-progress-bar { position: absolute; top:0; left:0; height:100%; background: rgba(79, 70, 229, 0.15); width: 0%; transition: width 0.5s cubic-bezier(0.1, 0.8, 0.2, 1); z-index: 1; }
+        .poll-option-text { position: relative; z-index: 2; display: flex; justify-content: space-between; font-weight: 600; font-size: 0.9rem; }
+
+        .q-card { background: var(--bg-main); border: 1px solid var(--border-color); padding: 16px; border-radius: 10px; margin-bottom: 12px; }
+        .q-user { font-size: 0.75rem; color: var(--fotmob-amber); font-weight: 800; text-transform: uppercase; margin-bottom: 6px; }
+        .q-text { font-size: 0.9rem; color: #fff; margin-bottom: 10px; word-break: break-word; }
+        .q-reply { background: var(--bg-badge); border-left: 3px solid var(--fotmob-green); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; }
+
+        /* ADMIN EXPANDIDO */
+        .admin-zone { display: none; border: 1px solid #4f46e5; background: #0b0f19; margin-top: 32px; }
+        .admin-navbar { display: flex; gap: 10px; padding: 16px; background: #131929; border-bottom: 1px solid var(--border-color); overflow-x: auto; }
+        .admin-nav-btn { background: var(--bg-badge); border: 1px solid var(--border-color); color: var(--text-secondary); padding: 10px 18px; border-radius: 8px; font-size: 0.8rem; font-weight: 700; cursor: pointer; white-space: nowrap; }
+        .admin-nav-btn.active { background: #4f46e5; color: #fff; border-color: transparent; }
+        .admin-tab-content { display: none; padding: 20px; }
+        .admin-tab-content.active { display: block; }
+        .form-group { margin-bottom: 16px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media(max-width:768px){ .grid-2 { grid-template-columns: 1fr; } }
+        label { display: block; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 6px; font-weight: 700; text-transform: uppercase; }
+        input, select, textarea { background: var(--bg-main); border: 1px solid var(--border-color); color: #fff; padding: 12px; border-radius: 8px; font-size: 0.9rem; width: 100%; box-sizing: border-box; }
+        input:focus, select:focus, textarea:focus { border-color: #4f46e5; outline: none; }
+        .btn-action { background: #4f46e5; color: #fff; border: none; padding: 14px; font-weight: 700; border-radius: 8px; cursor: pointer; width: 100%; text-transform: uppercase; font-size: 0.85rem; transition: background 0.2s; }
+        .btn-action:hover { background: #4338ca; }
+        .btn-danger { background: var(--fotmob-red); }
+        .btn-secondary { background: var(--bg-badge); color: var(--text-secondary); border: 1px solid var(--border-color); }
+        .team-manage-row { display: flex; justify-content: space-between; align-items: center; background: var(--bg-main); padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 8px; }
+        .team-manage-row.is-editing { border-color: #4f46e5; background: rgba(79, 70, 229, 0.12); }
+        .stats-split { display: grid; grid-template-columns: 1fr 320px; gap: 24px; }
+        @media(max-width: 768px) { .stats-split { grid-template-columns: 1fr; } }
+        .mini-list-item { display: flex; justify-content: space-between; align-items: center; background: var(--bg-main); padding: 8px 12px; border-radius: 6px; margin-bottom: 6px; font-size: 0.85rem; border: 1px solid var(--border-color); }
+
+        .roster-builder-box { background: var(--bg-main); padding: 16px; border: 1px solid var(--border-color); border-radius: 10px; margin-top: 10px; }
+        .roster-title { font-size: 0.8rem; font-weight: 800; color: var(--fotmob-amber); margin: 0 0 12px 0; text-transform: uppercase; }
+
+        /* MODAL */
+        .modal-backdrop { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(5px); z-index: 3000; justify-content: center; align-items: center; padding: 16px; box-sizing: border-box; }
+        .modal-content { background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 18px; max-width: 600px; width: 100%; padding: 28px; box-sizing: border-box; position: relative; }
+        .modal-close { position: absolute; top: 20px; right: 20px; background: transparent; border: none; color: var(--text-secondary); font-size: 1.3rem; cursor: pointer; }
+        .modal-match-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 24px; margin-bottom: 24px; }
+        .lineups-container { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+        .lineup-column h4 { margin: 0 0 14px 0; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; }
+        .player-item { padding: 10px 0; border-bottom: 1px dashed var(--border-color); font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
+        .badge-sub { font-size: 0.65rem; background: var(--bg-badge); padding: 2px 6px; border-radius: 4px; color: var(--text-secondary); font-weight: bold; }
+        .wa-banner-btn { display: inline-flex; align-items: center; gap: 10px; background: var(--whatsapp-green); color: #000; padding: 14px 22px; border-radius: 10px; text-decoration: none; font-weight: 800; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <header>
+            <div class="brand">
+                <h1 id="dyn-title">KINGS ELITE CHAMPIONS PRO</h1>
+                <p id="dyn-subtitle">Cargando...</p>
+            </div>
+            <div class="header-right">
+                <div id="sync-status" class="status-disconnected">Desconectado</div>
+                <button class="btn-gear-secret" onclick="triggerAdminPanel()">⚙️ Config</button>
+            </div>
+        </header>
+
+        <nav class="main-nav">
+            <button class="tab-btn active" id="tab-matches" onclick="switchView('matches')">Calendario y Roles</button>
+            <button class="tab-btn" id="tab-liga" onclick="switchView('liga')">Clasificación</button>
+            <button class="tab-btn" id="tab-scorers" onclick="switchView('scorers')">Estadísticas</button>
+            <button class="tab-btn" id="tab-info" onclick="switchView('info')">Info y Canales</button>
+            <button class="tab-btn" id="tab-comunidad" onclick="switchView('comunidad')">Comunidad 💬</button>
+        </nav>
+
+        <div id="view-matches" class="view-pane active">
+            <div class="section-container" id="render-partidos-container"></div>
+        </div>
+
+        <div id="view-liga" class="view-pane">
+            <div class="section-container">
+                <h2 class="section-title">Tabla de Posiciones</h2>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Equipo</th>
+                                <th style="text-align:center;">PJ</th>
+                                <th style="text-align:center;">G</th>
+                                <th style="text-align:center;">E</th>
+                                <th style="text-align:center;">P</th>
+                                <th style="text-align:center;">GF</th>
+                                <th style="text-align:center;">GC</th>
+                                <th style="text-align:center;">DG</th>
+                                <th style="text-align:center;">Forma</th>
+                                <th style="text-align:center;">PTS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="render-tabla-liga"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-scorers" class="view-pane">
+            <div class="stats-split">
+                <div class="section-container">
+                    <h2 class="section-title">Tabla de Goleadores</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th style="width:50px; text-align:center;">#</th>
+                                <th>Jugador</th>
+                                <th>Club</th>
+                                <th style="text-align:center;">Goles</th>
+                            </tr>
+                        </thead>
+                        <tbody id="render-tabla-goleadores"></tbody>
+                    </table>
+                </div>
+                <div class="section-container" style="background: linear-gradient(180deg, #161224, var(--bg-surface)); text-align:center; padding:30px 20px; border-color:#3b2a54;">
+                    <div style="color:var(--fotmob-amber); font-size:0.75rem; font-weight:800; text-transform:uppercase;">Jugador del Torneo (MVP)</div>
+                    <div style="font-size:3rem; margin:15px 0;">🏆</div>
+                    <h3 style="margin:0; font-size:1.4rem; font-weight:800;" id="render-mvp-name">-</h3>
+                    <p style="color:var(--text-secondary); font-size:0.9rem; margin:6px 0 0 0;" id="render-mvp-team">Sin asignar</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-info" class="view-pane">
+            <div class="stats-split">
+                <div class="section-container">
+                    <h2 class="section-title">📢 Tablón Oficial de Avisos</h2>
+                    <div id="render-tablon-noticias" style="padding: 20px; display: flex; flex-direction: column; gap: 16px;"></div>
+                </div>
+                <div>
+                    <div class="section-container" style="background: linear-gradient(180deg, #111a2e, var(--bg-surface)); padding: 24px 20px; border-color: #1e3a8a;">
+                        <h2 class="section-title" style="border:none; padding:0; margin-bottom:12px; color:#fff;">Comunidad Directa</h2>
+                        <p style="color: var(--text-secondary); font-size: 0.9rem; line-height: 1.6; margin: 0 0 20px 0;">Accede al grupo oficial para enterarte de cualquier aviso organizativo inmediato o reportes de última hora.</p>
+                        <div id="render-wa-container"><a id="render-wa-link" href="#" target="_blank" class="wa-banner-btn">💬 Canal de WhatsApp</a></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-comunidad" class="view-pane">
+            <div class="stats-split">
+                <div>
+                    <div class="section-container">
+                        <h2 class="section-title" id="poll-box-title">📊 Encuesta de la Jornada</h2>
+                        <div id="render-modulo-encuesta" style="padding: 20px;"></div>
+                    </div>
+
+                    <div class="section-container">
+                        <h2 class="section-title">❓ Preguntas a la Organización</h2>
+                        <div style="padding:20px; border-bottom: 1px solid var(--border-color); background: rgba(255,255,255,0.01);">
+                            <div class="grid-2">
+                                <div class="form-group"><label>Tu Nombre / Apodo</label><input type="text" id="usr-q-name" placeholder="Ej: Anónimo o JugadorX"></div>
+                                <div class="form-group"><label>Tu Duda o Consulta</label><input type="text" id="usr-q-text" placeholder="Escribe tu pregunta aquí..."></div>
+                            </div>
+                            <button class="btn-action" style="font-size:0.8rem; padding:10px;" onclick="enviarPreguntaUsuario()">Enviar Pregunta Pública</button>
+                        </div>
+                        <div id="render-lista-preguntas" style="padding:20px; max-height:450px; overflow-y:auto;"></div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="section-container">
+                        <h2 class="section-title">🔗 Enlaces Útiles</h2>
+                        <div id="render-enlaces-comunidad" style="padding: 20px 16px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="match-details-modal" class="modal-backdrop" onclick="closeMatchModal()">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <button class="modal-close" onclick="closeMatchModal()">✕</button>
+                <div class="modal-match-header" id="modal-match-header-content"></div>
+                <div class="lineups-container">
+                    <div>
+                        <h4 id="modal-local-team-title">-</h4>
+                        <div id="modal-local-lineup"></div>
+                    </div>
+                    <div style="text-align: right;">
+                        <h4 id="modal-visitor-team-title">-</h4>
+                        <div id="modal-visitor-lineup"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-container admin-zone" id="admin-main-panel">
+            <h2 class="section-title" style="color:#818cf8; border-color:#312e81;">🔒 Panel de Organización y Logística</h2>
+            
+            <div id="auth-box" style="padding:20px; display:flex; gap:12px;">
+                <input type="password" id="pass-key" placeholder="Código de acceso organizador...">
+                <button onclick="unlockAdmin()" class="btn-action" style="width:auto; padding:0 30px;">Entrar</button>
+            </div>
+
+            <div id="admin-interactive-area" style="display: none;">
+                <div class="admin-navbar">
+                    <button class="admin-nav-btn active" id="anb-config" onclick="switchAdminTab('config')">1. Estructura y Parámetros</button>
+                    <button class="admin-nav-btn" id="anb-equipos" onclick="switchAdminTab('equipos')">2. Inscripción Roster</button>
+                    <button class="admin-nav-btn" id="anb-actas" onclick="switchAdminTab('actas')">3. Mesa e Introducción</button>
+                    <button class="admin-nav-btn" id="anb-premios" onclick="switchAdminTab('premios')">4. Ajustes Manuales</button>
+                    <button class="admin-nav-btn" id="anb-noticias" onclick="switchAdminTab('noticias')">5. Boletines</button>
+                    <button class="admin-nav-btn" id="anb-comunidad" onclick="switchAdminTab('comunidad')">6. Gestión Comunidad</button>
+                </div>
+
+                <div class="admin-tab-content active" id="atc-config">
+                    <div class="grid-2">
+                        <div class="form-group">
+                            <label>Estructura General</label>
+                            <select id="cfg-formato">
+                                <option value="liga_ko">Liga Regular + Playoffs Finales</option>
+                                <option value="solo_liga">Solo Liga (Todos contra todos)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Tamaño Roster (Titulares fijos)</label>
+                            <select id="cfg-titulares-count" onchange="buildRosterInputs()">
+                                <option value="5">5 vs 5 (Fútbol Sala / Kings)</option>
+                                <option value="7">7 vs 7 (Fútbol 7)</option>
+                                <option value="11">11 vs 11 (Fútbol Estándar)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="background: rgba(79, 70, 229, 0.05); padding: 16px; border: 1px solid var(--border-color); border-radius: 10px; margin-bottom: 16px;">
+                        <h4 style="margin: 0 0 12px 0; color: #818cf8; font-size: 0.85rem;">📅 Planificación de Calendario Avanzado</h4>
+                        <div class="grid-2">
+                            <div class="form-group"><label>Fecha de Inicio del Torneo</label><input type="date" id="cal-date-start" value="2026-06-06"></div>
+                            <div class="form-group"><label>Hora de Apertura (1º Partido)</label><input type="time" id="cal-time-start" value="09:00"></div>
+                        </div>
+                        <div class="grid-2">
+                            <div class="form-group"><label>Duración + Descanso de Juego (Minutos)</label><input type="number" id="cal-duration" value="45" min="10"></div>
+                            <div class="form-group"><label>Campos / Sedes Disponibles (Separadas por comas)</label><input type="text" id="cal-venues" value="Campo Principal A, Pabellón Central"></div>
+                        </div>
+                    </div>
+
+                    <button class="btn-action" style="background:#10b981; margin-bottom: 20px;" onclick="procesarEstructuraTorneo()">⚡ Generar Calendario Completo Organizado</button>
+                    
+                    <div style="background: rgba(239, 68, 68, 0.08); padding: 16px; border: 1px solid rgba(255, 59, 48, 0.4); border-radius: 10px; margin-bottom: 20px;">
+                        <h4 style="margin: 0 0 12px 0; color: var(--fotmob-red); font-size: 0.85rem;">🛠️ Mantenimiento y Zona de Pruebas</h4>
+                        <div class="grid-2">
+                            <button class="btn-action" style="background: #eab308; color: #000;" onclick="cargarModoDebug()">🛠️ Cargar 6 Equipos (Modo Debug)</button>
+                            <button class="btn-action btn-danger" onclick="reiniciarTorneo()">⚠️ Reiniciar Todo el Torneo</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-tab-content" id="atc-equipos">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+                        <div>
+                            <h4 id="form-equipo-titulo">Formulario de Inscripción</h4>
+                            <div class="form-group"><label>Nombre Comercial del Club</label><input type="text" id="add-eq-name" placeholder="Ej: Rayo de Barcelona"></div>
+                            <div class="form-group"><label>Emblema o Logotipo (Emoji / URL)</label><input type="text" id="add-eq-shield" value="⚡"></div>
+                            
+                            <div class="roster-builder-box">
+                                <div class="roster-title">Composición del Roster Oficial</div>
+                                <div id="inputs-titulares-dinamicos"></div>
+                                <hr style="border-color: var(--border-color); margin: 12px 0;">
+                                <div class="form-group">
+                                    <label>Jugadores Suplentes (Separados por comas)</label>
+                                    <textarea id="add-suplentes-list" placeholder="Suplente 1, Suplente 2, Suplente 3..." style="height: 60px;"></textarea>
+                                </div>
+                            </div>
+
+                            <div style="display:flex; gap:10px; margin-top: 14px;">
+                                <button class="btn-action" id="btn-guardar-equipo" onclick="guardarEquipo()">Inscribir Club</button>
+                                <button class="btn-action btn-secondary" id="btn-cancelar-edicion" onclick="cancelarEdicionEquipo()" style="display:none;">Cancelar</button>
+                            </div>
+                        </div>
+                        <div>
+                            <h4>Equipos Participantes Confirmados</h4>
+                            <div id="admin-lista-equipos"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-tab-content" id="atc-actas">
+                    <div class="form-group"><label>Selección de Partido en Ficha</label><select id="actas-partido-select" onchange="cargarDetalleActaPartido()"></select></div>
+                    <div style="display:flex; gap:16px; margin-bottom:16px; align-items:center; justify-content:center; background:var(--bg-main); padding:15px; border-radius:10px; border:1px solid var(--border-color);">
+                        <div style="text-align:center; flex:1;"><span id="actas-lbl-local" style="font-weight:700; display:block; margin-bottom:5px;">-</span><input type="number" id="actas-gl" readonly style="text-align:center; font-size:1.5rem; font-weight:800; color:var(--fotmob-green); width:80px; display:inline-block; background:var(--bg-surface);"></div>
+                        <div style="font-size:1.5rem; font-weight:800; color:var(--text-muted);">:</div>
+                        <div style="text-align:center; flex:1;"><span id="actas-lbl-visitante" style="font-weight:700; display:block; margin-bottom:5px;">-</span><input type="number" id="actas-gv" readonly style="text-align:center; font-size:1.5rem; font-weight:800; color:var(--fotmob-green); width:80px; display:inline-block; background:var(--bg-surface);"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>Estado del Encuentro</label>
+                        <select id="actas-estado"><option value="Pendiente">Pendiente</option><option value="Jugándose">¡EN VIVO!</option><option value="Terminado">Terminado</option></select>
+                    </div>
+                    <label style="margin-bottom:8px;">Control de Incidencias de Cancha</label>
+                    <div id="actas-rosters-container" style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px; background:var(--bg-main); padding:15px; border-radius:10px; border:1px solid var(--border-color);"></div>
+                    <button class="btn-action" onclick="guardarActaPartido()">Certificar e Inyectar Acta de Juego</button>
+                </div>
+
+                <div class="admin-tab-content" id="atc-premios">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+                        <div>
+                            <h4>Inyección Directa de Goles</h4>
+                            <div class="form-group"><label>Club Emisor</label><select id="sc-team-select" onchange="actualizarDatalistGoleadores()"></select></div>
+                            <div class="form-group"><label>Nombre del Atleta</label><input type="text" id="sc-name" list="squad-autocomplete"><datalist id="squad-autocomplete"></datalist></div>
+                            <button class="btn-action" style="background:#10b981;" onclick="sumarGol()">Registrar Gol Manual</button>
+                            <div id="admin-goleadores-listado" style="margin-top:20px;"></div>
+                        </div>
+                        <div>
+                            <h4>Asignar MVP General</h4>
+                            <div class="form-group"><label>Club del Atleta</label><select id="mvp-team-select" onchange="actualizarDatalistMvp()"></select></div>
+                            <div class="form-group"><label>Nombre de Jugador</label><input type="text" id="mvp-name-input" list="mvp-autocomplete"><datalist id="mvp-autocomplete"></datalist></div>
+                            <button class="btn-action" style="background:var(--fotmob-amber); color:#000;" onclick="establecerMvp()">Publicar MVP Oficial</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-tab-content" id="atc-noticias">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+                        <div>
+                            <div class="form-group"><label>Link del Canal Informativo</label><input type="text" id="adm-wa-url"></div>
+                            <button class="btn-action" style="background:var(--fotmob-blue); margin-bottom:24px;" onclick="guardarEnlaceWhatsApp()">Actualizar Enlace Informativo</button>
+                            <h4>Generar Boletín Informativo</h4>
+                            <div class="form-group"><label>Cabecera</label><input type="text" id="adm-news-title"></div>
+                            <div class="form-group"><label>Mensaje</label><textarea id="adm-news-content" style="height:80px;"></textarea></div>
+                            <button class="btn-action" onclick="publicarAnuncio()">Emitir Comunicado</button>
+                        </div>
+                        <div><h4>Boletines Históricos</h4><div id="admin-noticias-listado"></div></div>
+                    </div>
+                </div>
+
+                <div class="admin-tab-content" id="atc-comunidad">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px;">
+                        <div>
+                            <h4 style="color:var(--fotmob-green); margin-top:0;">📊 Lanzar / Modificar Encuesta Activa</h4>
+                            <div class="form-group"><label>Pregunta Clave</label><input type="text" id="adm-poll-q" placeholder="¿Quién ganará el partido de la fecha?"></div>
+                            <div class="form-group"><label>Opciones Disponibles (Separadas por comas)</label><input type="text" id="adm-poll-options" placeholder="Opción A, Opción B, Opción C"></div>
+                            <button class="btn-action" style="background:#10b981; margin-bottom:12px;" onclick="publicarNuevaEncuesta()">Lanzar Encuesta (Borra Votos Previos)</button>
+                            <button class="btn-action btn-secondary" id="adm-poll-toggle-btn" onclick="conmutarEstadoEncuesta()">Cerrar / Pausar Encuesta</button>
+
+                            <h4 style="color:#38bdf8; margin-top:28px;">🔗 Enlaces de Interés Directos</h4>
+                            <div class="form-group"><label>Texto del Botón</label><input type="text" id="adm-link-label" placeholder="Ej: Reglamento Oficial PDF"></div>
+                            <div class="form-group"><label>URL Web Completa</label><input type="text" id="adm-link-url" placeholder="https://ejemplo.com/archivo"></div>
+                            <button class="btn-action" onclick="anadirEnlaceDirecto()">Inyectar Enlace Útil</button>
+                            <div id="adm-lista-enlaces-gestion" style="margin-top:14px;"></div>
+                        </div>
+                        <div>
+                            <h4 style="color:var(--fotmob-amber); margin-top:0;">📥 Respuestas del Buzón de Consultas</h4>
+                            <div id="adm-lista-preguntas-gestion" style="max-height:550px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const MQTT_TOPIC = "kings_elite_champions/torneo_data_v3_pro";
+        const mqttClient = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
+
+        let coreDB = {
+            config: { formato: "liga_ko", titularesCount: 5, whatsappUrl: "", dateStart: "2026-06-06", timeStart: "09:00", gameDuration: 45, venues: "Campo A, Campo B" },
+            equipos: [], partidos: [], goleadores: [], mvp: { nombre: "Por definir", equipo: "N/A" }, noticias: [],
+            comunidad: { enlaces: [], preguntas: [], encuesta: { pregunta: "Sin votaciones activas", opciones: [], activa: false } }
+        };
+
+        let idEquipoEditando = null;
+
+        if (localStorage.getItem("kings_elite_db_v3")) {
+            coreDB = JSON.parse(localStorage.getItem("kings_elite_db_v3"));
+        }
+        // Reparador de retrocompatibilidad por si faltan los objetos de comunidad
+        if (!coreDB.comunidad) {
+            coreDB.comunidad = { enlaces: [], preguntas: [], encuesta: { pregunta: "Sin votaciones activas", opciones: [], activa: false } };
+        }
+
+        mqttClient.on('connect', () => {
+            document.getElementById("sync-status").innerText = "Conectado Remoto";
+            document.getElementById("sync-status").className = "status-connected";
+            mqttClient.subscribe(MQTT_TOPIC);
+        });
+        mqttClient.on('close', () => {
+            document.getElementById("sync-status").innerText = "Modo Local Activo";
+            document.getElementById("sync-status").className = "status-disconnected";
+        });
+        mqttClient.on('message', (topic, message) => {
+            if (topic === MQTT_TOPIC) {
+                coreDB = JSON.parse(message.toString());
+                if (!coreDB.comunidad) coreDB.comunidad = { enlaces: [], preguntas: [], encuesta: { pregunta: "Sin votaciones activas", opciones: [], activa: false } };
+                localStorage.setItem("kings_elite_db_v3", JSON.stringify(coreDB));
+                renderEngine();
+                if(document.getElementById("admin-interactive-area").style.display === "block") syncAdminSelectors();
+            }
+        });
+
+        function saveAndSync() {
+            localStorage.setItem("kings_elite_db_v3", JSON.stringify(coreDB));
+            renderEngine();
+            mqttClient.publish(MQTT_TOPIC, JSON.stringify(coreDB), { qos: 1, retain: true });
+        }
+
+        function switchView(view) {
+            document.querySelectorAll('.view-pane').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`view-${view}`).classList.add('active');
+            document.getElementById(`tab-${view}`).classList.add('active');
+        }
+
+        function switchAdminTab(tab) {
+            document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.admin-nav-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`atc-${tab}`).classList.add('active');
+            document.getElementById(`anb-${tab}`).classList.add('active');
+            if(tab === 'premios') { actualizarDatalistGoleadores(); actualizarDatalistMvp(); }
+            if(tab === 'actas') cargarDetalleActaPartido();
+        }
+
+        function triggerAdminPanel() {
+            const p = document.getElementById("admin-main-panel");
+            p.style.display = (p.style.display === "block") ? "none" : "block";
+            if(p.style.display === "block") { buildRosterInputs(); p.scrollIntoView({ behavior: 'smooth' }); }
+        }
+
+        function unlockAdmin() {
+            if(document.getElementById("pass-key").value === "wheatley10") {
+                document.getElementById("auth-box").style.display = "none";
+                document.getElementById("admin-interactive-area").style.display = "block";
+                buildRosterInputs();
+                syncAdminSelectors();
+            } else { alert("Clave de acceso incorrecta."); }
+        }
+
+        function buildRosterInputs() {
+            const count = parseInt(document.getElementById("cfg-titulares-count").value || 5);
+            const container = document.getElementById("inputs-titulares-dinamicos");
+            container.innerHTML = "";
+            for(let i=1; i<=count; i++) {
+                container.innerHTML += `
+                    <div style="margin-bottom:6px;">
+                        <input type="text" class="input-titular-item" placeholder="Titular #${i} (Nombre Completo)" required>
+                    </div>`;
+            }
+        }
+
+        function parseShield(shieldStr) {
+            if (!shieldStr) return `<div class="shield-container">🛡️</div>`;
+            if (shieldStr.startsWith('http') || shieldStr.startsWith('data:image')) {
+                return `<div class="shield-container"><img src="${shieldStr}"></div>`;
+            }
+            return `<div class="shield-container">${shieldStr}</div>`;
+        }
+
+        function renderizarEnlaces(texto) {
+            if (!texto) return "";
+            const regexUrl = /(https?:\/\/[^\s]+)/g;
+            return texto.replace(regexUrl, function(url) {
+                return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #00e676; text-decoration: underline; font-weight: 700;">${url}</a>`;
+            });
+        }
+
+        // --- MANTENIMIENTO EXTENDIDO ---
+        function reiniciarTorneo() {
+            if (confirm("🚨 ¿ESTÁS ABSOLUTAMENTE SEGURO? Esto borrará permanentemente todos los equipos, actas, goles, comunicados, encuestas y consultas de la base de datos y de todos los clientes conectados.")) {
+                coreDB = {
+                    config: { formato: "liga_ko", titularesCount: 5, whatsappUrl: "", dateStart: "2026-06-06", timeStart: "09:00", gameDuration: 45, venues: "Campo A, Campo B" },
+                    equipos: [], partidos: [], goleadores: [], mvp: { nombre: "Por definir", equipo: "N/A" }, noticias: [],
+                    comunidad: { enlaces: [], preguntas: [], encuesta: { pregunta: "Sin votaciones activas", opciones: [], activa: false } }
+                };
+                cancelarEdicionEquipo();
+                syncAdminSelectors();
+                saveAndSync();
+                alert("La base de datos del torneo ha sido restaurada a cero.");
+                location.reload();
+            }
+        }
+
+        function cargarModoDebug() {
+            if (!confirm("🛠️ ¿Cargar entorno controlado de simulación? (Se crearán 6 equipos de la Kings League con rosters 5v5 completos, calendario listo para pruebas y módulos interactivos inicializados).")) return;
+
+            coreDB.config.titularesCount = 5;
+            document.getElementById("cfg-titulares-count").value = "5";
+
+            coreDB.equipos = [
+                { id: 101, nombre: "Aniquiladores FC", escudo: "🛡️", titulares: ["Juan Pérez (GK)", "Carlos Gómez", "Luis Martínez", "Andrés Silva", "Fran Hernández"], suplentes: ["M. Galván", "E. Castro"], pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0, racha: [] },
+                { id: 102, nombre: "Porcinos FC", escudo: "🐷", titulares: ["Ibai Llanos", "Poloteli", "Hugo Fraile", "Alberto Bueno", "David López"], suplentes: ["D. Soriano", "C. Val"], pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0, racha: [] },
+                { id: 103, nombre: "Ultimate Móstoles", escudo: "🦁", titulares: ["DjMaRiiO", "Arché", "Cichero", "Cristian Ubón", "Feliu"], suplentes: ["Aleix", "Guti"], pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0, racha: [] },
+                { id: 104, nombre: "Saiyans FC", escudo: "💥", titulares: ["TheGrefg", "Mantovani", "Joan Capdevila", "Roger Carbó", "Liñares"], suplentes: ["Campu", "J. Segovia"], pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0, racha: [] },
+                { id: 105, nombre: "Kunisports", escudo: "👑", titulares: ["Kun Agüero", "Coro", "Del Olmo", "Noel López", "M. Jg"], suplentes: ["Torrent", "Lluc"], pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0, racha: [] },
+                { id: 106, nombre: "Jijantes FC", escudo: "🦅", titulares: ["Gerard Romero", "Ibai Gómez", "Soriano", "Nando Quesada", "Arus"], suplentes: ["Jay", "Pol"], pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0, racha: [] }
+            ];
+
+            const ids = coreDB.equipos.map(e => e.id);
+            coreDB.partidos = algoritmoRoundRobinAvanzado(ids);
+            
+            coreDB.goleadores = [];
+            coreDB.mvp = { nombre: "Por definir", equipo: "N/A" };
+            coreDB.noticias = [
+                { id: Date.now(), titulo: "Entorno Debug Desplegado", contenido: "Fase regular estructurada en tiempo real. Visita el canal de transmisión oficial desde aquí: https://twitch.tv/kingsleague o lee el reglamento completo en https://kingsleague.pro", fecha: new Date().toLocaleDateString('es-ES') }
+            ];
+
+            coreDB.comunidad = {
+                enlaces: [
+                    { id: 1, etiqueta: "Reglamento Oficial de Competición", url: "https://kingsleague.pro" },
+                    { id: 2, etiqueta: "Canal Oficial de Transmisiones (Twitch)", url: "https://twitch.tv/kingsleague" }
+                ],
+                preguntas: [
+                    { id: 1, usuario: "Fan_Kings", texto: "¿Cuándo se juegan los Playoffs finales?", respuesta: "Inmediatamente al terminar las 5 fechas programadas de la fase regular.", respondida: true }
+                ],
+                encuesta: {
+                    pregunta: "¿Qué escuadra levantará la copa de campeones esta edición?",
+                    opciones: [
+                        { texto: "Porcinos FC", votos: 12 },
+                        { texto: "Aniquiladores FC", votos: 8 },
+                        { texto: "Saiyans FC", votos: 15 },
+                        { texto: "Ultimate Móstoles", votos: 9 }
+                    ],
+                    activa: true
+                }
+            };
+
+            recalcularClasificacion();
+            syncAdminSelectors();
+            saveAndSync();
+            alert("¡Entorno de simulación inyectado y propagado globalmente!");
+        }
+
+        // --- CALENDARIO AVANZADO LOGÍSTICA ---
+        function algoritmoRoundRobinAvanzado(equiposIds) {
+            let list = [...equiposIds];
+            if (list.length % 2 !== 0) list.push(null);
+            let rounds = list.length - 1;
+            let matchesPerRound = list.length / 2;
+            let partidos = [];
+
+            const dateStartInput = document.getElementById("cal-date-start").value;
+            const timeStartInput = document.getElementById("cal-time-start").value;
+            const duration = parseInt(document.getElementById("cal-duration").value || 45);
+            const venues = document.getElementById("cal-venues").value.split(',').map(v => v.trim()).filter(v=>v);
+
+            let baseDateTime = new Date(`${dateStartInput}T${timeStartInput}`);
+            let matchPointer = 0;
+
+            for (let round = 0; round < rounds; round++) {
+                let roundDate = new Date(baseDateTime.getTime());
+                roundDate.setDate(roundDate.getDate() + round);
+
+                let dailyMatchIndex = 0;
+
+                for (let match = 0; match < matchesPerRound; match++) {
+                    let home = list[match];
+                    let away = list[list.length - 1 - match];
+                    
+                    if (home !== null && away !== null) {
+                        let venueIndex = dailyMatchIndex % venues.length;
+                        let timeShiftSlot = Math.floor(dailyMatchIndex / venues.length);
+                        
+                        let matchTime = new Date(roundDate.getTime() + (timeShiftSlot * duration * 60000));
+                        let horaStr = matchTime.toLocaleTimeString('es-ES', {hour: '2-digit', minute:'2-digit'});
+                        let fechaStr = matchTime.toLocaleDateString('es-ES', {day: '2-digit', month:'2-digit', year:'numeric'});
+
+                        partidos.push({
+                            id: Date.now() + Math.random(),
+                            local: round % 2 === 1 ? away : home,
+                            visitante: round % 2 === 1 ? home : away,
+                            golesL: "-", golesV: "-", estado: "Pendiente",
+                            fase: "Liga Regular", instancia: `Jornada ${round + 1}`,
+                            fecha: fechaStr, hora: horaStr, sede: venues[venueIndex] || "Campo General",
+                            golesAsignados: {}, tarjetasAsignadas: {}
+                        });
+                        dailyMatchIndex++;
+                    }
+                }
+                list.splice(1, 0, list.pop());
+            }
+            return partidos;
+        }
+
+        function procesarEstructuraTorneo() {
+            coreDB.config.formato = document.getElementById("cfg-formato").value;
+            coreDB.config.titularesCount = parseInt(document.getElementById("cfg-titulares-count").value);
+            
+            const ids = coreDB.equipos.map(e => e.id);
+            if(ids.length < 2) return alert("Inscribe al menos 2 equipos para construir la liga.");
+
+            coreDB.partidos = algoritmoRoundRobinAvanzado(ids);
+            recalcularClasificacion();
+            saveAndSync();
+            alert("Calendario Avanzado estructurado con Horarios y Sedes asignados.");
+        }
+
+        // --- INSCRIPCIONES ---
+        function guardarEquipo() {
+            const name = document.getElementById("add-eq-name").value.trim();
+            const shield = document.getElementById("add-eq-shield").value.trim();
+            const suplentesText = document.getElementById("add-suplentes-list").value.trim();
+
+            let titularesArr = [];
+            document.querySelectorAll(".input-titular-item").forEach(inp => {
+                if(inp.value.trim()) titularesArr.push(inp.value.trim());
+            });
+
+            if(!name) return alert("El nombre del equipo es obligatorio.");
+            const minTitulares = coreDB.config.titularesCount || 5;
+            if(titularesArr.length < minTitulares) {
+                return alert(`Debes rellenar los ${minTitulares} jugadores titulares mínimos del esquema.`);
+            }
+
+            const suplentesArr = suplentesText ? suplentesText.split(',').map(x => x.trim()).filter(x=>x) : [];
+
+            if (idEquipoEditando === null) {
+                const nuevo = {
+                    id: Date.now(), nombre: name, escudo: shield || "🛡️",
+                    titulares: titularesArr, suplentes: suplentesArr,
+                    pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0, racha: []
+                };
+                coreDB.equipos.push(nuevo);
+            } else {
+                const eq = coreDB.equipos.find(e => e.id === idEquipoEditando);
+                if(eq) {
+                    eq.nombre = name; eq.escudo = shield || "🛡️";
+                    eq.titulares = titularesArr; eq.suplentes = suplentesArr;
+                }
+                cancelarEdicionEquipo();
+            }
+
+            document.getElementById("add-eq-name").value = "";
+            document.getElementById("add-suplentes-list").value = "";
+            document.querySelectorAll(".input-titular-item").forEach(i => i.value = "");
+            syncAdminSelectors();
+            saveAndSync();
+        }
+
+        function activarModoEdicion(id) {
+            const eq = coreDB.equipos.find(e => e.id === id);
+            if(!eq) return;
+            idEquipoEditando = id;
+            document.getElementById("form-equipo-titulo").innerText = "Editar Inscripción ✏️";
+            document.getElementById("add-eq-name").value = eq.nombre;
+            document.getElementById("add-eq-shield").value = eq.escudo;
+            document.getElementById("add-suplentes-list").value = (eq.suplentes || []).join(", ");
+
+            buildRosterInputs();
+            const inputs = document.querySelectorAll(".input-titular-item");
+            (eq.titulares || []).forEach((t, index) => {
+                if(inputs[index]) inputs[index].value = t;
+            });
+
+            document.getElementById("btn-guardar-equipo").innerText = "Guardar Cambios";
+            document.getElementById("btn-cancelar-edicion").style.display = "block";
+        }
+
+        function cancelarEdicionEquipo() {
+            idEquipoEditando = null;
+            document.getElementById("form-equipo-titulo").innerText = "Formulario de Inscripción";
+            document.getElementById("add-eq-name").value = "";
+            document.getElementById("add-suplentes-list").value = "";
+            buildRosterInputs();
+            document.getElementById("btn-guardar-equipo").innerText = "Inscribir Club";
+            document.getElementById("btn-cancelar-edicion").style.display = "none";
+        }
+
+        function eliminarEquipo(id) {
+            if(confirm("¿Eliminar este equipo de la base de datos?")) {
+                coreDB.equipos = coreDB.equipos.filter(e => e.id !== id);
+                saveAndSync();
+                syncAdminSelectors();
+            }
+        }
+
+        // --- MESA DE CONTROL ---
+        function cargarDetalleActaPartido() {
+            const pId = parseFloat(document.getElementById("actas-partido-select").value);
+            if (!pId) return;
+            const p = coreDB.partidos.find(x => x.id === pId);
+            if (!p) return;
+
+            const el = coreDB.equipos.find(x => x.id === p.local);
+            const ev = coreDB.equipos.find(x => x.id === p.visitante);
+
+            document.getElementById("actas-lbl-local").innerText = el ? el.nombre : "-";
+            document.getElementById("actas-lbl-visitante").innerText = ev ? ev.nombre : "-";
+            document.getElementById("actas-gl").value = p.golesL === "-" ? 0 : p.golesL;
+            document.getElementById("actas-gv").value = p.golesV === "-" ? 0 : p.golesV;
+            document.getElementById("actas-estado").value = p.estado;
+
+            if(!p.golesAsignados) p.golesAsignados = {};
+            if(!p.tarjetasAsignadas) p.tarjetasAsignadas = {};
+
+            const container = document.getElementById("actas-rosters-container");
+            container.innerHTML = "";
+
+            const renderRosterSide = (team, isLocal) => {
+                let html = `<div><h4 style="margin:0; font-size:0.85rem; color:#818cf8;">${team.nombre}</h4>`;
+                const buildRow = (pl, isSub) => {
+                    const currentGoles = p.golesAsignados[pl] || 0;
+                    const safePlId = pl.replace(/[^a-zA-Z0-9]/g, '_');
+                    const hasAm = p.tarjetasAsignadas[pl]?.amarilla || false;
+                    const hasRj = p.tarjetasAsignadas[pl]?.roja || false;
+                    return `
+                    <div style="display:flex; align-items:center; justify-content:space-between; padding:5px 0; border-bottom:1px solid #1e2638; font-size:0.8rem;">
+                        <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${pl} ${isSub ? '<span class="badge-sub">SUP</span>':''}</span>
+                        <div style="display:flex; gap:4px; align-items:center;">
+                            <button onclick="cambiarGolActa('${pl.replace(/'/g, "\\'")}', -1, ${isLocal}, event)" style="background:var(--bg-badge); border:none; color:#fff; width:18px; height:18px; font-weight:bold;">-</button>
+                            <span id="acta-gol-${isLocal?'l':'v'}-${safePlId}" style="width:14px; text-align:center; font-weight:700; color:var(--fotmob-green);">${currentGoles}</span>
+                            <button onclick="cambiarGolActa('${pl.replace(/'/g, "\\'")}', 1, ${isLocal}, event)" style="background:var(--bg-badge); border:none; color:#fff; width:18px; height:18px; font-weight:bold;">+</button>
+                            <input type="checkbox" id="acta-am-${safePlId}" ${hasAm?'checked':''} onchange="cambiarTarjetaActa('${pl.replace(/'/g, "\\'")}', 'amarilla')" style="width:auto;">🟨
+                            <input type="checkbox" id="acta-rj-${safePlId}" ${hasRj?'checked':''} onchange="cambiarTarjetaActa('${pl.replace(/'/g, "\\'")}', 'roja')" style="width:auto;">🟥
+                        </div>
+                    </div>`;
+                };
+                (team.titulares || []).forEach(t => { html += buildRow(t, false); });
+                (team.suplentes || []).forEach(s => { html += buildRow(s, true); });
+                html += `</div>`;
+                return html;
+            };
+
+            if(el) container.innerHTML += renderRosterSide(el, true);
+            if(ev) container.innerHTML += renderRosterSide(ev, false);
+        }
+
+        function cambiarGolActa(player, delta, isLocal, event) {
+            if(event) event.preventDefault();
+            const pId = parseFloat(document.getElementById("actas-partido-select").value);
+            const p = coreDB.partidos.find(x => x.id === pId);
+            if (!p) return;
+            let current = p.golesAsignados[player] || 0;
+            current += delta; if(current < 0) current = 0;
+            if(current === 0) delete p.golesAsignados[player]; else p.golesAsignados[player] = current;
+            const safeId = player.replace(/[^a-zA-Z0-9]/g, '_');
+            const span = document.getElementById(`acta-gol-${isLocal?'l':'v'}-${safeId}`);
+            if(span) span.innerText = current;
+            recalcularTotalesActaDesdeRoster(p);
+        }
+
+        function cambiarTarjetaActa(player, tipo) {
+            const pId = parseFloat(document.getElementById("actas-partido-select").value);
+            const p = coreDB.partidos.find(x => x.id === pId);
+            if(!p) return;
+            if(!p.tarjetasAsignadas) p.tarjetasAsignadas = {};
+            if(!p.tarjetasAsignadas[player]) p.tarjetasAsignadas[player] = {amarrila:false, roja:false};
+            const safeId = player.replace(/[^a-zA-Z0-9]/g, '_');
+            const chk = document.getElementById(`acta-${tipo==='amarilla'?'am':'rj'}-${safeId}`);
+            if(chk) p.tarjetasAsignadas[player][tipo] = chk.checked;
+        }
+
+        function recalcularTotalesActaDesdeRoster(p) {
+            const el = coreDB.equipos.find(x => x.id === p.local);
+            const ev = coreDB.equipos.find(x => x.id === p.visitante);
+            let totalL = 0, totalV = 0;
+            if(el) [...(el.titulares||[]), ...(el.suplentes||[])].forEach(pl => { totalL += (p.golesAsignados[pl]||0); });
+            if(ev) [...(ev.titulares||[]), ...(ev.suplentes||[])].forEach(pl => { totalV += (p.golesAsignados[pl]||0); });
+            document.getElementById("actas-gl").value = totalL;
+            document.getElementById("actas-gv").value = totalV;
+        }
+
+        function guardarActaPartido() {
+            const pId = parseFloat(document.getElementById("actas-partido-select").value);
+            const p = coreDB.partidos.find(x => x.id === pId);
+            if(p) {
+                p.golesL = parseInt(document.getElementById("actas-gl").value);
+                p.golesV = parseInt(document.getElementById("actas-gv").value);
+                p.estado = document.getElementById("actas-estado").value;
+                recalcularClasificacion();
+                saveAndSync();
+                alert("Acta certificada con éxito.");
+            }
+        }
+
+        function recalcularClasificacion() {
+            coreDB.equipos.forEach(e => { e.pj=0; e.g=0; e.e=0; e.p=0; e.gf=0; e.gc=0; e.dg=0; e.pts=0; e.racha=[]; });
+            coreDB.partidos.forEach(p => {
+                if(p.fase === "Liga Regular" && p.estado === "Terminado") {
+                    const l = coreDB.equipos.find(e => e.id === p.local);
+                    const v = coreDB.equipos.find(e => e.id === p.visitante);
+                    if(l && v) {
+                        l.pj++; v.pj++; l.gf += p.golesL; l.gc += p.golesV; v.gf += p.golesV; v.gc += p.golesL;
+                        if(p.golesL > p.golesV) { l.g++; l.pts+=3; v.p++; l.racha.push('G'); v.racha.push('P'); }
+                        else if(p.golesV > p.golesL) { v.g++; v.pts+=3; l.p++; v.racha.push('G'); l.racha.push('P'); }
+                        else { l.e++; v.e++; l.pts+=1; v.pts+=1; l.racha.push('E'); v.racha.push('E'); }
+                        l.dg = l.gf - l.gc; v.dg = v.gf - v.gc;
+                    }
+                }
+            });
+        }
+
+        function obtenerGoleadoresCombinados() {
+            let mapa = {};
+            (coreDB.goleadores || []).forEach(g => {
+                const key = `${g.nombre.toLowerCase()}||${g.equipo}`;
+                if (!mapa[key]) mapa[key] = { nombre: g.nombre, equipo: g.equipo, goles: 0 };
+                mapa[key].goles += g.goles;
+            });
+            coreDB.partidos.forEach(p => {
+                if(p.golesAsignados) {
+                    for(let pl in p.golesAsignados) {
+                        const eq = coreDB.equipos.find(e => [...(e.titulares||[]), ...(e.suplentes||[])].includes(pl));
+                        const eqName = eq ? eq.nombre : "Desconocido";
+                        const key = `${pl.toLowerCase()}||${eqName}`;
+                        if(!mapa[key]) mapa[key] = { nombre: pl, equipo: eqName, goles: 0 };
+                        mapa[key].goles += p.golesAsignados[pl];
+                    }
+                }
+            });
+            return Object.values(mapa).filter(x => x.goles > 0);
+        }
+
+        // ========================================================
+        // LOGICA DE COMUNIDAD: ENCUESTAS, PREGUNTAS Y ENLACES
+        // ========================================================
+        function votarEncuesta(opcionIndex) {
+            const enc = coreDB.comunidad.encuesta;
+            if (!enc || !enc.activa) return alert("Esta votación está actualmente cerrada o pausada.");
+            
+            const lockKey = "voted_poll_" + enc.pregunta.replace(/\s+/g, '_');
+            if (localStorage.getItem(lockKey)) {
+                return alert("Ya has registrado tu voto para esta encuesta.");
+            }
+
+            if (enc.opciones[opcionIndex]) {
+                enc.opciones[opcionIndex].votos = (enc.opciones[opcionIndex].votos || 0) + 1;
+                localStorage.setItem(lockKey, "true");
+                saveAndSync();
+                alert("¡Voto registrado y sincronizado en la nube!");
+            }
+        }
+
+        function enviarPreguntaUsuario() {
+            const usrName = document.getElementById("usr-q-name").value.trim() || "Anónimo";
+            const usrText = document.getElementById("usr-q-text").value.trim();
+            if (!usrText) return alert("Por favor, describe detalladamente tu pregunta.");
+
+            const nuevaPregunta = {
+                id: Date.now(),
+                usuario: usrName,
+                texto: usrText,
+                respuesta: "",
+                respondida: false
+            };
+
+            coreDB.comunidad.preguntas.unshift(nuevaPregunta);
+            document.getElementById("usr-q-text").value = "";
+            saveAndSync();
+            alert("Consulta enviada a la mesa organizadora.");
+        }
+
+        // --- CONTROLES DE COMUNIDAD (ADMIN SIDE) ---
+        function publicarNuevaEncuesta() {
+            const q = document.getElementById("adm-poll-q").value.trim();
+            const optsRaw = document.getElementById("adm-poll-options").value.trim();
+            if (!q || !optsRaw) return alert("Falta definir la pregunta o las opciones comerciales.");
+
+            const opcionesArr = optsRaw.split(',').map(o => ({ texto: o.trim(), votos: 0 })).filter(o => o.texto);
+
+            coreDB.comunidad.encuesta = {
+                pregunta: q,
+                opciones: opcionesArr,
+                activa: true
+            };
+
+            document.getElementById("adm-poll-q").value = "";
+            document.getElementById("adm-poll-options").value = "";
+            saveAndSync();
+            alert("Nueva encuesta desplegada para votación pública.");
+        }
+
+        function conmutarEstadoEncuesta() {
+            if (coreDB.comunidad.encuesta) {
+                coreDB.comunidad.encuesta.activa = !coreDB.comunidad.encuesta.activa;
+                saveAndSync();
+            }
+        }
+
+        function anadirEnlaceDirecto() {
+            const label = document.getElementById("adm-link-label").value.trim();
+            const url = document.getElementById("adm-link-url").value.trim();
+            if (!label || !url) return alert("Falta etiqueta o URL.");
+
+            coreDB.comunidad.enlaces.push({ id: Date.now(), etiqueta: label, url: url });
+            document.getElementById("adm-link-label").value = "";
+            document.getElementById("adm-link-url").value = "";
+            saveAndSync();
+        }
+
+        function eliminarEnlaceComunidad(id) {
+            coreDB.comunidad.enlaces = coreDB.comunidad.enlaces.filter(l => l.id !== id);
+            saveAndSync();
+        }
+
+        function responderPreguntaAdmin(id) {
+            const rText = document.getElementById(`adm-reply-text-${id}`).value.trim();
+            if(!rText) return alert("Escribe un mensaje de respuesta.");
+            
+            const question = coreDB.comunidad.preguntas.find(q => q.id === id);
+            if(question) {
+                question.respuesta = rText;
+                question.respondida = true;
+                saveAndSync();
+                alert("Respuesta publicada oficialmente.");
+            }
+        }
+
+        function eliminarPregunta(id) {
+            if (confirm("¿Eliminar de forma permanente esta consulta del buzón público?")) {
+                coreDB.comunidad.preguntas = coreDB.comunidad.preguntas.filter(q => q.id !== id);
+                saveAndSync();
+            }
+        }
+
+        function syncAdminSelectors() {
+            const listDiv = document.getElementById("admin-lista-equipos");
+            listDiv.innerHTML = "";
+            coreDB.equipos.forEach(e => {
+                listDiv.innerHTML += `
+                <div class="team-manage-row ${e.id===idEquipoEditando?'is-editing':''}">
+                    <div>${parseShield(e.escudo)} <strong>${e.nombre}</strong> (${(e.titulares||[]).length}T + ${(e.suplentes||[]).length}S)</div>
+                    <div style="display:flex; gap:4px;">
+                        <button class="btn-action" style="padding:4px 8px; font-size:0.7rem;" onclick="activarModoEdicion(${e.id})">Editar</button>
+                        <button class="btn-action btn-danger" style="padding:4px 8px; font-size:0.7rem;" onclick="eliminarEquipo(${e.id})">X</button>
+                    </div>
+                </div>`;
+            });
+
+            const selActas = document.getElementById("actas-partido-select");
+            selActas.innerHTML = "";
+            coreDB.partidos.forEach(p => {
+                const el = coreDB.equipos.find(x => x.id === p.local);
+                const ev = coreDB.equipos.find(x => x.id === p.visitante);
+                if(el && ev) selActas.innerHTML += `<option value="${p.id}">[${p.instancia}] ${el.nombre} vs ${ev.nombre}</option>`;
+            });
+
+            const scSel = document.getElementById("sc-team-select");
+            const mvpSel = document.getElementById("mvp-team-select");
+            scSel.innerHTML = ""; mvpSel.innerHTML = "";
+            coreDB.equipos.forEach(e => {
+                scSel.innerHTML += `<option value="${e.nombre}">${e.nombre}</option>`;
+                mvpSel.innerHTML += `<option value="${e.nombre}">${e.nombre}</option>`;
+            });
+
+            document.getElementById("adm-wa-url").value = coreDB.config.whatsappUrl || "";
+            
+            // Render de enlaces en panel de administración
+            const linkMgmt = document.getElementById("adm-lista-enlaces-gestion");
+            linkMgmt.innerHTML = "";
+            coreDB.comunidad.enlaces.forEach(l => {
+                linkMgmt.innerHTML += `
+                <div class="mini-list-item">
+                    <span>${l.etiqueta}</span>
+                    <button class="btn-action btn-danger" style="padding:4px 8px; font-size:0.65rem; width:auto;" onclick="eliminarEnlaceComunidad(${l.id})">Eliminar</button>
+                </div>`;
+            });
+
+            // Conmutador del estado de encuesta
+            const pollBtn = document.getElementById("adm-poll-toggle-btn");
+            if (coreDB.comunidad.encuesta && coreDB.comunidad.encuesta.activa) {
+                pollBtn.innerText = "Pausar / Cerrar Encuesta Activa";
+                pollBtn.style.background = "var(--fotmob-red)";
+                pollBtn.style.color = "#fff";
+            } else {
+                pollBtn.innerText = "Reabrir Encuesta / Activar";
+                pollBtn.style.background = "var(--fotmob-blue)";
+                pollBtn.style.color = "#fff";
+            }
+
+            // Render de preguntas en panel de administración
+            const qMgmt = document.getElementById("adm-lista-preguntas-gestion");
+            qMgmt.innerHTML = "";
+            coreDB.comunidad.preguntas.forEach(q => {
+                qMgmt.innerHTML += `
+                <div style="background:var(--bg-main); border:1px solid var(--border-color); padding:12px; border-radius:8px;">
+                    <div style="display:flex; justify-content:between; align-items:center; margin-bottom:6px; justify-content:space-between;">
+                        <span style="font-size:0.7rem; color:var(--fotmob-amber); font-weight:bold;">DE: ${q.usuario}</span>
+                        <button class="btn-action btn-danger" style="padding:2px 6px; font-size:0.6rem; width:auto; text-transform:none;" onclick="eliminarPregunta(${q.id})">Descartar</button>
+                    </div>
+                    <p style="margin:0 0 10px 0; font-size:0.8rem; color:#fff;">"${q.texto}"</p>
+                    <textarea id="adm-reply-text-${q.id}" placeholder="Escribe la respuesta organizativa..." style="height:50px; font-size:0.8rem; margin-bottom:6px;">${q.respuesta || ''}</textarea>
+                    <button class="btn-action" style="font-size:0.75rem; padding:6px; background:var(--fotmob-green); color:#000;" onclick="responderPreguntaAdmin(${q.id})">Publicar Respuesta</button>
+                </div>`;
+            });
+
+            cargarDetalleActaPartido();
+        }
+
+        function openMatchDetails(matchId) {
+            const p = coreDB.partidos.find(x => x.id === matchId);
+            if(!p) return;
+            const el = coreDB.equipos.find(e => e.id === p.local);
+            const ev = coreDB.equipos.find(e => e.id === p.visitante);
+            if(!el || !ev) return;
+
+            let centerStr = `<div class="score-box pending">VS</div>`;
+            if(p.estado === "Terminado") centerStr = `<div class="score-box">${p.golesL} - ${p.golesV}</div>`;
+            if(p.estado === "Jugándose") centerStr = `<div class="m-center-score-block"><div class="score-box live">${p.golesL} - ${p.golesV}</div><span class="live-dot-text">● EN VIVO</span></div>`;
+
+            document.getElementById("modal-match-header-content").innerHTML = `
+                <div class="m-team left-side" style="width:40%;">${parseShield(el.escudo)} <strong>${el.nombre}</strong></div>
+                ${centerStr}
+                <div class="m-team" style="width:40%;">${parseShield(ev.escudo)} <strong>${ev.nombre}</strong></div>`;
+
+            document.getElementById("modal-local-team-title").innerText = el.nombre;
+            document.getElementById("modal-visitor-team-title").innerText = ev.nombre;
+
+            const renderRosterModal = (team, containerId, isRight) => {
+                const b = document.getElementById(containerId); b.innerHTML = "";
+                const renderPlayerLine = (pl, isSub) => {
+                    const gl = p.golesAsignados?.[pl] || 0;
+                    const am = p.tarjetasAsignadas?.[pl]?.amarilla ? "🟨" : "";
+                    const rj = p.tarjetasAsignadas?.[pl]?.roja ? "🟥" : "";
+                    const icons = `${gl>0?'⚽'+gl:''} ${am} ${rj}`.trim();
+                    return `<div class="player-item" style="${isRight?'justify-content:flex-end;':''}">
+                        ${isRight? `<span><small style="color:var(--text-muted); margin-right:6px;">${icons}</small>${pl} ${isSub?'<small class="badge-sub">SUP</small>':''}</span>` : `<span>${pl} ${isSub?'<small class="badge-sub">SUP</small>':''} <small style="color:var(--text-muted); margin-left:6px;">${icons}</small></span>`}
+                    </div>`;
+                };
+                (team.titulares||[]).forEach(t => b.innerHTML += renderPlayerLine(t, false));
+                (team.suplentes||[]).forEach(s => b.innerHTML += renderPlayerLine(s, true));
+            };
+
+            renderRosterModal(el, "modal-local-lineup", false);
+            renderRosterModal(ev, "modal-visitor-lineup", true);
+            document.getElementById("match-details-modal").style.display = "flex";
+        }
+
+        function closeMatchModal() { document.getElementById("match-details-modal").style.display = "none"; }
+
+        function renderEngine() {
+            document.getElementById("dyn-subtitle").innerText = `Formato: Pro (${coreDB.config.titularesCount}v${coreDB.config.titularesCount})`;
+            const contMatches = document.getElementById("render-partidos-container");
+            contMatches.innerHTML = "";
+
+            let mapG = {};
+            coreDB.partidos.forEach(p => { if(!mapG[p.instancia]) mapG[p.instancia] = []; mapG[p.instancia].push(p); });
+
+            for(let key in mapG) {
+                let block = document.createElement("div");
+                block.innerHTML = `<div class="match-group-label"><span>${key}</span></div>`;
+                mapG[key].forEach(p => {
+                    const el = coreDB.equipos.find(x => x.id === p.local);
+                    const ev = coreDB.equipos.find(x => x.id === p.visitante);
+                    if(el && ev) {
+                        let center = `<div class="score-box pending">${p.hora || 'VS'}</div>`;
+                        if(p.estado === "Terminado") center = `<div class="score-box">${p.golesL} - ${p.golesV}</div>`;
+                        if(p.estado === "Jugándose") center = `<div class="score-box live">${p.golesL} - ${p.golesV}</div>`;
+                        
+                        block.innerHTML += `
+                        <div class="match-row-item" onclick="openMatchDetails(${p.id})">
+                            <div class="m-info-meta"><span>📅 ${p.fecha||'-'}</span><span style="color:var(--text-muted); font-size:0.65rem;">📍 ${p.sede||'-'}</span></div>
+                            <div class="m-team left-side">${parseShield(el.escudo)} <span>${el.nombre}</span></div>
+                            <div style="width:14%; text-align:center;">${center}</div>
+                            <div class="m-team">${parseShield(ev.escudo)} <span>${ev.nombre}</span></div>
+                        </div>`;
+                    }
+                });
+                contMatches.appendChild(block);
+            }
+
+            const tbodyL = document.getElementById("render-tabla-liga"); tbodyL.innerHTML = "";
+            let sTeams = [...coreDB.equipos].sort((a,b)=> b.pts - a.pts || b.dg - a.dg);
+            sTeams.forEach((eq, i) => {
+                tbodyL.innerHTML += `<tr>
+                    <td><span class="table-pos">${i+1}</span>${parseShield(eq.escudo)} <strong>${eq.nombre}</strong></td>
+                    <td style="text-align:center;">${eq.pj}</td><td style="text-align:center;">${eq.g}</td><td style="text-align:center;">${eq.e}</td><td style="text-align:center;">${eq.p}</td>
+                    <td style="text-align:center;">${eq.gf}</td><td style="text-align:center;">${eq.gc}</td><td style="text-align:center;">${eq.dg}</td>
+                    <td>-</td><td style="text-align:center;" class="pts-bold">${eq.pts}</td>
+                </tr>`;
+            });
+
+            const tbodySc = document.getElementById("render-tabla-goleadores"); tbodySc.innerHTML = "";
+            obtenerGoleadoresCombinados().sort((a,b)=>b.goles-a.goles).forEach((sc, i) => {
+                tbodySc.innerHTML += `<tr><td>${i+1}</td><td><strong>${sc.nombre}</strong></td><td>${sc.equipo}</td><td style="color:var(--fotmob-green); font-weight:800;">${sc.goles}</td></tr>`;
+            });
+
+            const waLink = document.getElementById("render-wa-link");
+            if (waLink) waLink.href = coreDB.config.whatsappUrl || "#";
+
+            const tablon = document.getElementById("render-tablon-noticias");
+            tablon.innerHTML = "";
+            if (!coreDB.noticias || coreDB.noticias.length === 0) {
+                tablon.innerHTML = `<p style="color:var(--text-muted); font-size:0.9rem; text-align:center; padding:10px 0;">No hay comunicados oficiales en este momento.</p>`;
+            } else {
+                coreDB.noticias.forEach(n => {
+                    tablon.innerHTML += `
+                    <div style="background:var(--bg-main); padding:16px; border:1px solid var(--border-color); border-radius:10px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:10px;">
+                            <h4 style="margin:0; font-size:0.95rem; color:var(--fotmob-amber); font-weight:700;">${n.titulo}</h4>
+                            <span style="font-size:0.75rem; color:var(--text-muted); white-space:nowrap;">${n.fecha}</span>
+                        </div>
+                        <p style="margin:0; font-size:0.85rem; color:var(--text-secondary); line-height:1.5; white-space:pre-wrap;">${renderizarEnlaces(n.contenido)}</p>
+                    </div>`;
+                });
+            }
+
+            const adminNoticias = document.getElementById("admin-noticias-listado");
+            adminNoticias.innerHTML = "";
+            if (coreDB.noticias && coreDB.noticias.length > 0) {
+                coreDB.noticias.forEach(n => {
+                    adminNoticias.innerHTML += `
+                    <div class="mini-list-item" style="flex-direction:column; align-items:flex-start; gap:6px;">
+                        <div style="display:flex; justify-content:space-between; width:100%; align-items:center; gap:8px;">
+                            <strong style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${n.titulo}</strong>
+                            <button class="btn-action btn-danger" style="padding:4px 8px; font-size:0.65rem; width:auto; text-transform:none;" onclick="eliminarAnuncio(${n.id})">Eliminar</button>
+                        </div>
+                        <span style="font-size:0.7rem; color:var(--text-muted);">${n.fecha}</span>
+                    </div>`;
+                });
+            } else {
+                adminNoticias.innerHTML = `<p style="color:var(--text-muted); font-size:0.8rem; margin:0;">No hay boletines históricos creados.</p>`;
+            }
+
+            // ==========================================
+            // DIBUJO MOTOR: INTERFAZ DE COMUNIDAD DE USUARIOS
+            // ==========================================
+            // 1. Renderizar Enlaces Útiles
+            const containerLinks = document.getElementById("render-enlaces-comunidad");
+            containerLinks.innerHTML = "";
+            if (coreDB.comunidad.enlaces.length === 0) {
+                containerLinks.innerHTML = `<p style="color:var(--text-muted); font-size:0.85rem; text-align:center;">No hay recursos externos enlazados.</p>`;
+            } else {
+                coreDB.comunidad.enlaces.forEach(l => {
+                    containerLinks.innerHTML += `
+                    <a href="${l.url}" target="_blank" rel="noopener noreferrer" class="link-card">
+                        <span>${l.etiqueta}</span>
+                        <span style="color:var(--fotmob-green);">➔</span>
+                    </a>`;
+                });
+            }
+
+            // 2. Renderizar Encuesta Interactiva (Con cálculo de porcentajes dinámicos)
+            const enc = coreDB.comunidad.encuesta;
+            const containerPoll = document.getElementById("render-modulo-encuesta");
+            const pollBoxTitle = document.getElementById("poll-box-title");
+            
+            if (!enc || !enc.opciones || enc.opciones.length === 0) {
+                pollBoxTitle.innerText = "📊 Encuesta Cerrada";
+                containerPoll.innerHTML = `<p style="color:var(--text-muted); font-size:0.85rem; text-align:center; margin:0;">No hay debates abiertos actualmente.</p>`;
+            } else {
+                pollBoxTitle.innerText = enc.activa ? `📊 Encuesta: ${enc.pregunta}` : `🔒 Encuesta Finalizada: ${enc.pregunta}`;
+                containerPoll.innerHTML = "";
+                
+                const totalVotos = enc.opciones.reduce((acc, current) => acc + (current.votos || 0), 0);
+                const lockKey = "voted_poll_" + enc.pregunta.replace(/\s+/g, '_');
+                const yaVoto = localStorage.getItem(lockKey) !== null || !enc.activa;
+
+                enc.opciones.forEach((opt, idx) => {
+                    const pct = totalVotos > 0 ? Math.round((opt.votos / totalVotos) * 100) : 0;
+                    
+                    containerPoll.innerHTML += `
+                    <div class="poll-option-box ${yaVoto ? 'voted-disabled' : ''}" onclick="${yaVoto ? '' : `votarEncuesta(${idx})`}">
+                        <div class="poll-progress-bar" style="width: ${pct}%;"></div>
+                        <div class="poll-option-text">
+                            <span>${opt.texto}</span>
+                            <span style="color:${yaVoto ? 'var(--fotmob-green)' : 'var(--text-muted)'}; font-weight:800;">
+                                ${pct}% ${yaVoto ? `<small style="font-weight:400; color:var(--text-muted)">(${opt.votos}v)</small>` : ''}
+                            </span>
+                        </div>
+                    </div>`;
+                });
+            }
+
+            // 3. Renderizar Lista de Consultas Públicas (Buzón de Preguntas)
+            const containerQ = document.getElementById("render-lista-preguntas");
+            containerQ.innerHTML = "";
+            if (coreDB.comunidad.preguntas.length === 0) {
+                containerQ.innerHTML = `<p style="color:var(--text-muted); font-size:0.85rem; text-align:center; margin:10px 0;">No se han formulado preguntas todavía.</p>`;
+            } else {
+                coreDB.comunidad.preguntas.forEach(q => {
+                    let answerHtml = ``;
+                    if (q.respondida) {
+                        answerHtml = `<div class="q-reply"><strong>组织 (Organización):</strong> ${renderizarEnlaces(q.respuesta)}</div>`;
+                    } else {
+                        answerHtml = `<div class="q-reply" style="border-color:var(--fotmob-amber); color:var(--fotmob-amber); font-weight:500;">⏱️ Esperando respuesta del staff...</div>`;
+                    }
+
+                    containerQ.innerHTML += `
+                    <div class="q-card">
+                        <div class="q-user">👤 Por: ${q.usuario}</div>
+                        <div class="q-text">${q.texto}</div>
+                        ${answerHtml}
+                    </div>`;
+                });
+            }
+        }
+
+        renderEngine();
+    </script>
+</body>
+</html>

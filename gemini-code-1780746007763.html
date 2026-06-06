@@ -1,0 +1,1747 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FotMob Premium - Kings Elite Tracker Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght=400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        :root {
+            --bg-main: #080a10;
+            --bg-surface: #111622;
+            --bg-row-hover: #192030;
+            --bg-badge: #20293a;
+            --border-color: #1e2638;
+            --text-primary: #ffffff;
+            --text-secondary: #8a96a8;
+            --text-muted: #576375;
+            --fotmob-green: #00e676;
+            --fotmob-red: #ff3b30;
+            --fotmob-amber: #ffcc00;
+            --fotmob-blue: #1d4ed8;
+            --admin-accent: #6366f1;
+            --admin-accent-hover: #4f46e5;
+            --admin-bg-card: #141b2d;
+        }
+
+        body {
+            margin: 0; padding: 0;
+            background-color: var(--bg-main);
+            color: var(--text-primary);
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .app-container { max-width: 1100px; margin: 0 auto; padding: 24px 16px; box-sizing: border-box; }
+        header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; }
+        .brand h1 { margin: 0; font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; cursor: pointer; user-select: none; }
+        .brand p { margin: 4px 0 0 0; color: var(--text-secondary); font-size: 0.85rem; }
+        .header-right { display: flex; align-items: center; gap: 12px; }
+        #sync-status { font-size: 0.75rem; font-weight: 700; padding: 6px 14px; border-radius: 20px; background: var(--bg-surface); border: 1px solid var(--border-color); }
+        .status-disconnected { color: var(--fotmob-red); }
+        .status-connected { color: var(--fotmob-green); }
+
+        .main-nav { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 24px; gap: 28px; overflow-x: auto; }
+        .tab-btn { background: transparent; border: none; color: var(--text-secondary); padding: 14px 2px; font-size: 0.95rem; font-weight: 700; cursor: pointer; position: relative; white-space: nowrap; transition: color 0.2s; }
+        .tab-btn:hover { color: var(--text-primary); }
+        .tab-btn.active { color: var(--fotmob-green); }
+        .tab-btn.active::after { content: ""; position: absolute; bottom: -1px; left: 0; right: 0; height: 3px; background-color: var(--fotmob-green); border-radius: 3px; }
+
+        .view-pane { display: none; }
+        .view-pane.active { display: block; }
+        .section-container { background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 14px; overflow: hidden; margin-bottom: 24px; }
+        .section-title { padding: 18px 20px; margin: 0; font-size: 0.85rem; font-weight: 800; border-bottom: 1px solid var(--border-color); color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.8px; }
+
+        /* PARTIDOS DETALLE AVANZADO */
+        .match-group-label { background: var(--bg-main); padding: 10px 20px; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; }
+        .match-row-item { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--border-color); transition: background-color 0.15s; cursor: pointer; }
+        .match-row-item:hover { background-color: var(--bg-row-hover); }
+        .m-info-meta { font-size: 0.75rem; color: var(--text-muted); display: flex; flex-direction: column; width: 20%; gap: 2px; }
+        .m-team { display: flex; align-items: center; gap: 12px; font-size: 0.95rem; font-weight: 600; width: 32%; }
+        .m-team.left-side { flex-direction: row-reverse; text-align: right; }
+        .shield-container { width: 26px; height: 26px; display: inline-flex; align-items: center; justify-content: center; font-size: 1.2rem; }
+        .shield-container img { width: 100%; height: 100%; object-fit: contain; }
+        .m-center-score-block { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 16%; }
+        .score-box { background: var(--bg-badge); padding: 6px 14px; border-radius: 6px; font-size: 0.95rem; font-weight: 800; min-width: 44px; text-align: center; }
+        .score-box.live { color: var(--fotmob-green); border: 1px solid rgba(0, 230, 118, 0.3); background: rgba(0, 230, 118, 0.05); }
+        .score-box.pending { color: var(--text-secondary); font-size: 0.8rem; font-weight: 600; }
+        .live-dot-text { font-size: 0.65rem; color: var(--fotmob-red); font-weight: 800; margin-top: 4px; text-transform: uppercase; animation: pulse 1.2s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th { padding: 14px 20px; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); border-bottom: 1px solid var(--border-color); text-transform: uppercase; }
+        td { padding: 16px 20px; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); }
+        .table-pos { color: var(--text-muted); font-weight: 700; margin-right: 10px; width: 18px; display: inline-block; }
+        .pts-bold { font-weight: 800; color: var(--fotmob-green); }
+
+        /* INTERFAZ COMUNIDAD ESTILOS */
+        .link-card { display: flex; align-items: center; justify-content: space-between; background: var(--bg-main); border: 1px solid var(--border-color); padding: 14px 18px; border-radius: 10px; text-decoration: none; color: #fff; font-weight: 700; font-size: 0.9rem; margin-bottom: 10px; transition: background 0.2s, border-color 0.2s; }
+        .link-card:hover { background: var(--bg-row-hover); border-color: var(--fotmob-green); }
+        
+        .poll-option-box { background: var(--bg-main); border: 1px solid var(--border-color); border-radius: 8px; padding: 14px; margin-bottom: 10px; cursor: pointer; position: relative; overflow: hidden; transition: border-color 0.2s; }
+        .poll-option-box:hover { border-color: var(--admin-accent); }
+        .poll-option-box.voted-disabled { cursor: default; border-color: var(--border-color); }
+        .poll-progress-bar { position: absolute; top:0; left:0; height:100%; background: rgba(99, 102, 241, 0.15); width: 0%; transition: width 0.5s cubic-bezier(0.1, 0.8, 0.2, 1); z-index: 1; }
+        .poll-option-text { position: relative; z-index: 2; display: flex; justify-content: space-between; font-weight: 600; font-size: 0.9rem; }
+
+        .q-card { background: var(--bg-main); border: 1px solid var(--border-color); padding: 16px; border-radius: 10px; margin-bottom: 12px; }
+        .q-user { font-size: 0.75rem; color: var(--fotmob-amber); font-weight: 800; text-transform: uppercase; margin-bottom: 6px; }
+        .q-text { font-size: 0.9rem; color: #fff; margin-bottom: 10px; word-break: break-word; }
+        .q-reply { background: var(--bg-badge); border-left: 3px solid var(--fotmob-green); padding: 10px 14px; border-radius: 0 8px 8px 0; font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; }
+
+        /* ADMIN PREMIUM */
+        .admin-zone { display: none; border: 1px solid var(--admin-accent); background: #0a0e17; margin-top: 32px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        .admin-header-panel { background: linear-gradient(90deg, #111726, #161f33); padding: 20px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; }
+        .admin-navbar { display: flex; gap: 6px; padding: 12px; background: #111622; border-bottom: 1px solid var(--border-color); overflow-x: auto; }
+        .admin-nav-btn { background: transparent; border: none; color: var(--text-secondary); padding: 10px 16px; border-radius: 6px; font-size: 0.8rem; font-weight: 700; cursor: pointer; white-space: nowrap; transition: all 0.2s; }
+        .admin-nav-btn:hover { color: #fff; background: rgba(255,255,255,0.03); }
+        .admin-nav-btn.active { background: var(--admin-accent); color: #fff; }
+        
+        .admin-tab-content { display: none; padding: 24px; }
+        .admin-tab-content.active { display: block; }
+        
+        .admin-card { background: var(--admin-bg-card); border: 1px solid var(--border-color); border-radius: 10px; padding: 20px; margin-bottom: 20px; position: relative; }
+        .admin-card-title { margin: 0 0 16px 0; font-size: 0.9rem; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px; }
+        
+        .form-group { margin-bottom: 16px; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media(max-width:768px){ .grid-2 { grid-template-columns: 1fr; } }
+        label { display: block; font-size: 0.75rem; color: var(--text-secondary); margin-bottom: 6px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+        input, select, textarea { background: var(--bg-main); border: 1px solid var(--border-color); color: #fff; padding: 12px; border-radius: 8px; font-size: 0.9rem; width: 100%; box-sizing: border-box; transition: border-color 0.2s; }
+        input:focus, select:focus, textarea:focus { border-color: var(--admin-accent); outline: none; }
+        
+        .btn-action { background: var(--admin-accent); color: #fff; border: none; padding: 12px 20px; font-weight: 700; border-radius: 8px; cursor: pointer; width: 100%; text-transform: uppercase; font-size: 0.8rem; letter-spacing: 0.5px; transition: background 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-action:hover { background: var(--admin-accent-hover); }
+        .btn-danger { background: var(--fotmob-red); }
+        .btn-danger:hover { background: #cc2f25; }
+        .btn-secondary { background: var(--bg-badge); color: var(--text-secondary); border: 1px solid var(--border-color); }
+        .btn-secondary:hover { color: #fff; background: var(--bg-row-hover); }
+        
+        .team-manage-row { display: flex; justify-content: space-between; align-items: center; background: var(--bg-main); padding: 12px 16px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 8px; }
+        .team-manage-row.is-editing { border-color: var(--admin-accent); background: rgba(99, 102, 241, 0.08); }
+        .stats-split { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+        @media(max-width: 860px) { .stats-split { grid-template-columns: 1fr; } }
+        .mini-list-item { display: flex; justify-content: space-between; align-items: center; background: var(--bg-main); padding: 10px 14px; border-radius: 6px; margin-bottom: 6px; font-size: 0.85rem; border: 1px solid var(--border-color); }
+
+        .roster-builder-box { background: var(--bg-main); padding: 16px; border: 1px solid var(--border-color); border-radius: 10px; margin-top: 10px; }
+        .roster-title { font-size: 0.8rem; font-weight: 800; color: var(--fotmob-amber); margin: 0 0 12px 0; text-transform: uppercase; }
+
+        /* MODAL */
+        .modal-backdrop { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(5px); z-index: 3000; justify-content: center; align-items: center; padding: 16px; box-sizing: border-box; }
+        .modal-content { background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 18px; max-width: 600px; width: 100%; padding: 28px; box-sizing: border-box; position: relative; }
+        .modal-close { position: absolute; top: 20px; right: 20px; background: transparent; border: none; color: var(--text-secondary); font-size: 1.3rem; cursor: pointer; }
+        .modal-match-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 24px; margin-bottom: 24px; }
+        .lineups-container { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+        .lineup-column h4 { margin: 0 0 14px 0; font-size: 0.8rem; color: var(--text-secondary); text-transform: uppercase; }
+        .player-item { padding: 10px 0; border-bottom: 1px dashed var(--border-color); font-size: 0.9rem; display: flex; align-items: center; gap: 8px; }
+        .badge-sub { font-size: 0.65rem; background: var(--bg-badge); padding: 2px 6px; border-radius: 4px; color: var(--text-secondary); font-weight: bold; }
+
+        /* NUEVOS COMPONENTES PANEL DINÁMICO */
+        .cancha-layout { display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
+        @media(max-width: 900px) { .cancha-layout { grid-template-columns: 1fr; } }
+        
+        .roster-zone { background: var(--bg-main); border: 1px solid var(--border-color); padding: 12px; border-radius: 10px; margin-bottom: 14px; }
+        .roster-zone-title { font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid rgba(255,255,255,0.03); padding-bottom: 4px;}
+        
+        .p-row { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--bg-surface); border: 1px solid var(--border-color); margin-bottom: 6px; border-radius: 8px; transition: all 0.2s; position: relative; }
+        .p-row.drag-over { border-color: var(--fotmob-green); background: rgba(0, 230, 118, 0.05); }
+        .p-row.player-suspended { opacity: 0.4; pointer-events: none; background: #1a1518; border-dash: 1px dashed var(--fotmob-red); }
+        
+        /* Animaciones Cambio */
+        @keyframes flashIn { 0% { background: rgba(0,230,118,0.4); } 100% { background: var(--bg-surface); } }
+        @keyframes flashOut { 0% { background: rgba(255,59,48,0.4); } 100% { background: var(--bg-surface); } }
+        .anim-sub-in { animation: flashIn 1s ease-out; }
+        .anim-sub-out { animation: flashOut 1s ease-out; }
+
+        /* Menús flotantes popover rápidos */
+        .floating-popover { position: absolute; background: #1a2035; border: 1px solid var(--admin-accent); border-radius: 8px; padding: 6px; z-index: 100; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.5); gap: 6px; }
+        .floating-popover button { background: var(--bg-badge); border: 1px solid var(--border-color); color: #fff; font-size: 0.75rem; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-weight: 600; }
+        .floating-popover button:hover { background: var(--admin-accent); }
+
+        .assist-menu { max-height: 200px; overflow-y: auto; width: 220px; flex-direction: column; }
+        .assist-big-btn { background: rgba(99,102,241,0.15) !important; color: var(--admin-accent) !important; font-size: 0.85rem !important; padding: 10px !important; text-align: left; font-weight: 800 !important; border: 1px solid var(--admin-accent) !important; margin-bottom: 4px; }
+
+        /* Línea de tiempo */
+        .timeline-box { background: var(--admin-bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; max-height: 600px; }
+        .timeline-stream { overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 8px; margin-top: 10px; padding-right: 4px; }
+        .timeline-item { background: var(--bg-main); border: 1px solid var(--border-color); padding: 8px 12px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; font-size: 0.8rem; }
+        .timeline-item-meta { display: flex; flex-direction: column; gap: 2px; }
+        .btn-trash { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 0.9rem; padding: 4px; }
+        .btn-trash:hover { color: var(--fotmob-red); }
+
+        /* Toast global */
+        #global-toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: #1e1b4b; border: 1px solid var(--admin-accent); padding: 14px 24px; border-radius: 10px; box-shadow: 0 10px 25px rgba(0,0,0,0.6); display: none; align-items: center; gap: 16px; z-index: 9999; font-size: 0.9rem; color: #fff; font-weight: 500; }
+        #global-toast button { background: var(--fotmob-amber); border: none; color: #000; padding: 4px 10px; font-weight: 700; border-radius: 4px; cursor: pointer; font-size: 0.75rem; text-transform: uppercase; }
+
+        @media (max-width: 680px) {
+            .app-container { padding: 12px 10px; }
+            header { flex-direction: column; align-items: flex-start; gap: 14px; padding-bottom: 16px; }
+            .header-right { width: 100%; justify-content: space-between; }
+            .main-nav { gap: 16px; margin-bottom: 16px; }
+            .tab-btn { padding: 10px 2px; font-size: 0.85rem; }
+            .match-row-item { flex-direction: column; align-items: stretch; padding: 12px 16px; gap: 10px; }
+            .m-info-meta { width: 100%; flex-direction: row; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 8px; margin-bottom: 2px; }
+            .m-team { width: 100% !important; justify-content: flex-start !important; text-align: left !important; font-size: 0.95rem; }
+            .m-team.left-side { flex-direction: row; }
+            .match-row-item > div:nth-child(3) { width: 100% !important; display: flex; justify-content: center; background: rgba(255, 255, 255, 0.02); padding: 6px 0; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.03); }
+            .m-center-score-block { width: 100% !important; }
+            .score-box { width: 100%; max-width: 150px; padding: 8px; }
+            th, td { padding: 12px 8px; font-size: 0.8rem; }
+            .table-pos { margin-right: 4px; width: 14px; }
+            .modal-content { padding: 20px; border-radius: 14px; max-height: 92vh; overflow-y: auto; }
+            .modal-match-header { flex-direction: column; gap: 12px; padding-bottom: 16px; margin-bottom: 16px; text-align: center; }
+            .modal-match-header .m-team { justify-content: center !important; width: 100% !important; }
+            .lineups-container { grid-template-columns: 1fr; gap: 24px; }
+            .lineups-container > div { text-align: left !important; }
+            .player-item { justify-content: flex-start !important; }
+            .admin-navbar { padding: 6px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="app-container">
+        <header>
+            <div class="brand">
+                <h1 id="dyn-title" onclick="handleLogoAdminTrigger()">KINGS ELITE CHAMPIONS PRO</h1>
+                <p id="dyn-subtitle">Cargando...</p>
+            </div>
+            <div class="header-right">
+                <div id="sync-status" class="status-disconnected">Desconectado</div>
+            </div>
+        </header>
+
+        <nav class="main-nav">
+            <button class="tab-btn active" id="tab-matches" onclick="switchView('matches')">Calendario y Roles</button>
+            <button class="tab-btn" id="tab-liga" onclick="switchView('liga')">Clasificación</button>
+            <button class="tab-btn" id="tab-scorers" onclick="switchView('scorers')">Estadísticas</button>
+            <button class="tab-btn" id="tab-info" onclick="switchView('info')">Tablón de Avisos 📢</button>
+            <button class="tab-btn" id="tab-comunidad" onclick="switchView('comunidad')">Comunidad 💬</button>
+        </nav>
+
+        <div id="view-matches" class="view-pane active">
+            <div class="section-container" id="render-partidos-container"></div>
+        </div>
+
+        <div id="view-liga" class="view-pane">
+            <div class="section-container">
+                <h2 class="section-title">Tabla de Posiciones</h2>
+                <div style="overflow-x: auto;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Equipo</th>
+                                <th style="text-align:center;">PJ</th>
+                                <th style="text-align:center;">G</th>
+                                <th style="text-align:center;">E</th>
+                                <th style="text-align:center;">P</th>
+                                <th style="text-align:center;">GF</th>
+                                <th style="text-align:center;">GC</th>
+                                <th style="text-align:center;">DG</th>
+                                <th style="text-align:center; min-width: 110px;">Forma</th>
+                                <th style="text-align:center;">PTS</th>
+                            </tr>
+                        </thead>
+                        <tbody id="render-tabla-liga"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-scorers" class="view-pane">
+            <div class="stats-split">
+                <div style="display:flex; flex-direction:column; gap:24px;">
+                    <div class="section-container">
+                        <h2 class="section-title">⚽ Tabla de Goleadores</h2>
+                        <div style="overflow-x: auto;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th style="width:50px; text-align:center;">#</th>
+                                        <th>Jugador</th>
+                                        <th>Club</th>
+                                        <th style="text-align:center;">Goles</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="render-tabla-goleadores"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="section-container">
+                        <h2 class="section-title">🧤 Guante de Oro (Vallas Invictas)</h2>
+                        <div style="overflow-x: auto;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th style="width:50px; text-align:center;">#</th>
+                                        <th>Equipo / Portería</th>
+                                        <th style="text-align:center;">Partidos a Cero</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="render-tabla-porteros"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display:flex; flex-direction:column; gap:24px;">
+                    <div class="section-container" style="background: linear-gradient(180deg, #161224, var(--bg-surface)); text-align:center; padding:30px 20px; border-color:#3b2a54;">
+                        <div style="color:var(--fotmob-amber); font-size:0.75rem; font-weight:800; text-transform:uppercase;">Jugador del Torneo (MVP)</div>
+                        <div style="font-size:3rem; margin:15px 0;">🏆</div>
+                        <h3 style="margin:0; font-size:1.4rem; font-weight:800;" id="render-mvp-name">-</h3>
+                        <p style="color:var(--text-secondary); font-size:0.9rem; margin:6px 0 0 0;" id="render-mvp-team">Sin asignar</p>
+                    </div>
+
+                    <div class="section-container">
+                        <h2 class="section-title">🟨 Tabla de Sanciones y Disciplina 🟥</h2>
+                        <div style="overflow-x: auto;">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Jugador (Equipo)</th>
+                                        <th style="text-align:center;">🟨</th>
+                                        <th style="text-align:center;">🟥</th>
+                                        <th style="text-align:center;">Estatus</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="render-tabla-sanciones"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="view-info" class="view-pane">
+            <div class="section-container">
+                <h2 class="section-title">📢 Tablón Oficial de Avisos</h2>
+                <div id="render-tablon-noticias" style="padding: 20px; display: flex; flex-direction: column; gap: 16px;"></div>
+            </div>
+        </div>
+
+        <div id="view-comunidad" class="view-pane">
+            <div class="stats-split">
+                <div>
+                    <div class="section-container">
+                        <h2 class="section-title" id="poll-box-title">📊 Encuesta de la Jornada</h2>
+                        <div id="render-modulo-encuesta" style="padding: 20px;"></div>
+                    </div>
+
+                    <div class="section-container">
+                        <h2 class="section-title">❓ Preguntas a la Organización</h2>
+                        <div style="padding:20px; border-bottom: 1px solid var(--border-color); background: rgba(255,255,255,0.01);">
+                            <div class="grid-2">
+                                <div class="form-group"><label>Tu Nombre / Apodo</label><input type="text" id="usr-q-name" placeholder="Ej: Anónimo o JugadorX"></div>
+                                <div class="form-group"><label>Tu Duda o Consulta</label><input type="text" id="usr-q-text" placeholder="Escribe tu pregunta aquí..."></div>
+                            </div>
+                            <button class="btn-action" style="font-size:0.8rem; padding:10px;" onclick="enviarPreguntaUsuario()">Enviar Pregunta Pública</button>
+                        </div>
+                        <div id="render-lista-preguntas" style="padding:20px; max-height:450px; overflow-y:auto;"></div>
+                    </div>
+                </div>
+
+                <div>
+                    <div class="section-container">
+                        <h2 class="section-title">🔗 Enlaces Útiles</h2>
+                        <div id="render-enlaces-comunidad" style="padding: 20px 16px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div id="match-details-modal" class="modal-backdrop" onclick="closeMatchModal()">
+            <div class="modal-content" onclick="event.stopPropagation()">
+                <button class="modal-close" onclick="closeMatchModal()">✕</button>
+                <div class="modal-match-header" id="modal-match-header-content"></div>
+                <div class="lineups-container">
+                    <div>
+                        <h4 id="modal-local-team-title">-</h4>
+                        <div id="modal-local-lineup"></div>
+                    </div>
+                    <div>
+                        <h4 id="modal-visitor-team-title">-</h4>
+                        <div id="modal-visitor-lineup"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL DE ADMINISTRACIÓN OCULTO -->
+        <div class="section-container admin-zone" id="admin-main-panel">
+            <div class="admin-header-panel">
+                <h2 style="color:#a5b4fc; margin:0; font-size:1.1rem; font-weight:800; letter-spacing:0.5px;">🔒 PANEL DE ORGANIZACIÓN</h2>
+                <span style="font-size:0.75rem; background:rgba(99,102,241,0.2); padding:4px 10px; border-radius:12px; color:#a5b4fc; font-weight:700;">Modo Gestor Activo</span>
+            </div>
+            
+            <div id="auth-box" style="padding:24px; display:flex; gap:12px; background:var(--admin-bg-card);">
+                <input type="password" id="pass-key" placeholder="Introduce el código de acceso organizador...">
+                <button onclick="unlockAdmin()" class="btn-action" style="width:auto; padding:0 30px;">🔓 Entrar</button>
+            </div>
+
+            <div id="admin-interactive-area" style="display: none;">
+                <div class="admin-navbar">
+                    <button class="admin-nav-btn active" id="anb-config" onclick="switchAdminTab('config')">⚙️ Estructura</button>
+                    <button class="admin-nav-btn" id="anb-equipos" onclick="switchAdminTab('equipos')">🛡️ Roster / Equipos</button>
+                    <button class="admin-nav-btn" id="anb-actas" onclick="switchAdminTab('actas')">📝 Mesa de Juego</button>
+                    <button class="admin-nav-btn" id="anb-premios" onclick="switchAdminTab('premios')">🏆 Goles y MVP</button>
+                    <button class="admin-nav-btn" id="anb-noticias" onclick="switchAdminTab('noticias')">📢 Boletines</button>
+                    <button class="admin-nav-btn" id="anb-comunidad" onclick="switchAdminTab('comunidad')">💬 Comunidad</button>
+                </div>
+
+                <div class="admin-tab-content active" id="atc-config">
+                    <div class="admin-card">
+                        <div class="admin-card-title">⚙️ Configuración del Formato</div>
+                        <div class="grid-2">
+                            <div class="form-group">
+                                <label>Estructura General</label>
+                                <select id="cfg-formato">
+                                    <option value="liga_ko">Liga Regular + Playoffs Finales</option>
+                                    <option value="solo_liga">Solo Liga (Todos contra todos)</option>
+                                    <option value="ko_double">Eliminatorias Directas (Ida y Vuelta)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>Tamaño Roster (Titulares fijos)</label>
+                                <select id="cfg-titulares-count" onchange="buildRosterInputs()">
+                                    <option value="5">5 vs 5 (Fútbol Sala / Kings)</option>
+                                    <option value="7">7 vs 7 (Fútbol 7)</option>
+                                    <option value="11">11 vs 11 (Fútbol Estándar)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="admin-card">
+                        <div class="admin-card-title">📅 Planificación de Calendario Avanzado</div>
+                        <div class="grid-2">
+                            <div class="form-group"><label>Fecha de Inicio</label><input type="date" id="cal-date-start" value="2026-06-06"></div>
+                            <div class="form-group"><label>Hora de Apertura (1º Partido)</label><input type="time" id="cal-time-start" value="09:00"></div>
+                        </div>
+                        <div class="grid-2">
+                            <div class="form-group"><label>Duración + Descanso (Minutos)</label><input type="number" id="cal-duration" value="45" min="10"></div>
+                            <div class="form-group"><label>Campos / Sedes Disponibles</label><input type="text" id="cal-venues" value="Campo Principal A, Pabellón Central"></div>
+                        </div>
+                    </div>
+
+                    <button class="btn-action" style="background:#10b981; margin-bottom: 20px;" onclick="procesarEstructuraTorneo()">⚡ Generar Calendario Automatizado</button>
+                    
+                    <div class="admin-card" style="border-color: var(--admin-accent); background: rgba(99,102,241,0.03);">
+                        <div class="admin-card-title" style="color:#a5b4fc;">🏆 Gestión de Fases Avanzadas y Cruces</div>
+                        <p style="font-size:0.8rem; color:var(--text-secondary); margin:0 0 12px 0;">Ejecuta el avance automatizado de llaves cuando concluyan los partidos de la ronda actual.</p>
+                        <div class="grid-2">
+                            <button class="btn-action" style="background:var(--admin-accent);" onclick="generarPlayoffsDesdeLiga()">🔥 Activar Semifinales (Top 4 Liga)</button>
+                            <button class="btn-action" style="background:#0284c7;" onclick="avanzarRondaKoDouble()">🔊 Avanzar Llave (Ida/Vuelta)</button>
+                        </div>
+                    </div>
+
+                    <div style="background: rgba(239, 68, 68, 0.05); padding: 16px; border: 1px solid rgba(255, 59, 48, 0.2); border-radius: 10px;">
+                        <h4 style="margin: 0 0 12px 0; color: var(--fotmob-red); font-size: 0.8rem; font-weight: 700; text-transform: uppercase;">Mantenimiento Crítico</h4>
+                        <button class="btn-action btn-danger" onclick="reiniciarTorneo()">⚠️ Reiniciar Torneo Completo</button>
+                    </div>
+                </div>
+
+                <div class="admin-tab-content" id="atc-equipos">
+                    <div class="grid-2">
+                        <div class="admin-card">
+                            <div class="admin-card-title" id="form-equipo-titulo">Formulario de Inscripción</div>
+                            <div class="form-group"><label>Nombre del Club</label><input type="text" id="add-eq-name" placeholder="Ej: Rayo de Barcelona"></div>
+                            <div class="form-group"><label>Emblema / Escudo (Emoji o URL)</label><input type="text" id="add-eq-shield" value="⚡"></div>
+                            
+                            <div class="roster-builder-box">
+                                <div class="roster-title">Lista de Titulares Oficiales</div>
+                                <div id="inputs-titulares-dinamicos"></div>
+                                <hr style="border-color: var(--border-color); margin: 16px 0;">
+                                <div class="form-group">
+                                    <label>Jugadores Suplentes (Separados por comas)</label>
+                                    <textarea id="add-suplentes-list" placeholder="Suplente 1, Suplente 2, Suplente 3..." style="height: 60px;"></textarea>
+                                </div>
+                            </div>
+
+                            <div style="display:flex; gap:10px; margin-top: 14px;">
+                                <button class="btn-action" id="btn-guardar-equipo" onclick="guardarEquipo()">Inscribir Club</button>
+                                <button class="btn-action btn-secondary" id="btn-cancelar-edicion" onclick="cancelarEdicionEquipo()" style="display:none;">Cancelar</button>
+                            </div>
+                        </div>
+                        <div class="admin-card">
+                            <div class="admin-card-title">Participantes Confirmados</div>
+                            <div id="admin-lista-equipos"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-tab-content" id="atc-actas">
+                    <div class="admin-card">
+                        <div class="admin-card-title">📝 Mesa de Juego Interactiva</div>
+                        <div class="form-group">
+                            <label>Selecciona el Partido a Gestionar</label>
+                            <select id="actas-partido-select" onchange="cargarDetalleActaPartido()"></select>
+                        </div>
+                        <div style="display:flex; gap:16px; margin-bottom:16px; align-items:center; justify-content:center; background:var(--bg-main); padding:15px; border-radius:10px; border:1px solid var(--border-color);">
+                            <div style="text-align:center; flex:1;"><span id="actas-lbl-local" style="font-weight:700; display:block; margin-bottom:5px;">-</span><input type="number" id="actas-gl" readonly style="text-align:center; font-size:1.5rem; font-weight:800; color:var(--fotmob-green); width:80px; display:inline-block; background:var(--bg-surface);"></div>
+                            <div style="font-size:1.5rem; font-weight:800; color:var(--text-muted);">:</div>
+                            <div style="text-align:center; flex:1;"><span id="actas-lbl-visitante" style="font-weight:700; display:block; margin-bottom:5px;">-</span><input type="number" id="actas-gv" readonly style="text-align:center; font-size:1.5rem; font-weight:800; color:var(--fotmob-green); width:80px; display:inline-block; background:var(--bg-surface);"></div>
+                        </div>
+                        <div class="form-group">
+                            <label>Estado del Encuentro</label>
+                            <select id="actas-estado" onchange="cambiarEstadoInmediato()">
+                                <option value="Pendiente">Pendiente</option>
+                                <option value="1ª Parte">1ª Parte</option>
+                                <option value="Descanso">Descanso</option>
+                                <option value="2ª Parte">2ª Parte</option>
+                                <option value="Terminado">Terminado</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="cancha-layout">
+                        <div id="actas-rosters-container"></div>
+                        
+                        <!-- Panel Lateral: Historial Vivo -->
+                        <div class="timeline-box">
+                            <label>⏱️ Línea de Tiempo del Partido</label>
+                            <div class="timeline-stream" id="match-timeline-stream">
+                                <span style="color:var(--text-muted); font-size:0.8rem; text-align:center; display:block; margin-top:20px;">Sin eventos registrados.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-tab-content" id="atc-premios">
+                    <div class="grid-2">
+                        <div class="admin-card">
+                            <div class="admin-card-title">⚽ Inyección Directa de Goles Manuales</div>
+                            <div class="form-group"><label>Club Emisor</label><select id="sc-team-select" onchange="actualizarDatalistGoleadores()"></select></div>
+                            <div class="form-group"><label>Nombre del Atleta</label><input type="text" id="sc-name" list="squad-autocomplete"><datalist id="squad-autocomplete"></datalist></div>
+                            <div class="form-group"><label>Cantidad de Goles</label><input type="number" id="sc-goals-count" value="1" min="1"></div>
+                            <button class="btn-action" style="background:#10b981;" onclick="sumarGol()">Registrar Gol</button>
+                        </div>
+                        <div class="admin-card">
+                            <div class="admin-card-title">🏆 Distinción MVP General del Torneo</div>
+                            <div class="form-group"><label>Club del Atleta</label><select id="mvp-team-select" onchange="actualizarDatalistMvp()"></select></div>
+                            <div class="form-group"><label>Nombre de Jugador</label><input type="text" id="mvp-name-input" list="mvp-autocomplete"><datalist id="mvp-autocomplete"></datalist></div>
+                            <button class="btn-action" style="background:var(--fotmob-amber); color:#000;" onclick="establecerMvp()">Publicar MVP Oficial</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-tab-content" id="atc-noticias">
+                    <div class="grid-2">
+                        <div class="admin-card">
+                            <div class="admin-card-title">📢 Crear Nuevo Comunicado Oficial</div>
+                            <div class="form-group"><label>Cabecera / Título</label><input type="text" id="adm-news-title" placeholder="Ej: Cambios de horario Jornada 3"></div>
+                            <div class="form-group"><label>Mensaje / Cuerpo del Aviso</label><textarea id="adm-news-content" placeholder="Escribe el anuncio aquí..." style="height:100px;"></textarea></div>
+                            <button class="btn-action" onclick="publicarAnuncio()">Emitir Comunicado</button>
+                        </div>
+                        <div class="admin-card">
+                            <div class="admin-card-title">🗂️ Historial de Avisos Emitidos</div>
+                            <div id="admin-noticias-listado"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-tab-content" id="atc-comunidad">
+                    <div class="grid-2">
+                        <div class="admin-card">
+                            <div class="admin-card-title">📊 Gestión de Encuestas de la Jornada</div>
+                            <div class="form-group"><label>Pregunta Clave</label><input type="text" id="adm-poll-q" placeholder="¿Quién ganará el MVP de esta fecha?"></div>
+                            <div class="form-group"><label>Opciones Disponibles (Separadas por comas)</label><input type="text" id="adm-poll-options" placeholder="Opción A, Opción B, Opción C"></div>
+                            <button class="btn-action" style="background:#10b981; margin-bottom:12px;" onclick="publicarNuevaEncuesta()">🚀 Lanzar Nueva Encuesta</button>
+                            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+                                <button class="btn-action btn-secondary" id="adm-poll-toggle-btn" onclick="conmutarEstadoEncuesta()">Pausar</button>
+                                <button class="btn-action btn-danger" onclick="eliminarEncuesta()">🗑️ Borrar Encuesta</button>
+                            </div>
+
+                            <div class="admin-card-title" style="margin-top:30px;">🔗 Enlaces Útiles Directos</div>
+                            <div class="form-group"><label>Texto del Botón</label><input type="text" id="adm-link-label" placeholder="Ej: Reglamento Oficial PDF"></div>
+                            <div class="form-group"><label>URL Web Completa</label><input type="text" id="adm-link-url" placeholder="https://ejemplo.com/archivo"></div>
+                            <button class="btn-action" onclick="anadirEnlaceDirecto()">Inyectar Enlace Útil</button>
+                            <div id="adm-lista-enlaces-gestion" style="margin-top:14px;"></div>
+                        </div>
+                        <div class="admin-card">
+                            <div class="admin-card-title">📥 Consultas del Buzón de la Comunidad</div>
+                            <div id="adm-lista-preguntas-gestion" style="max-height:550px; overflow-y:auto; display:flex; flex-direction:column; gap:12px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Menús Rápidos Flotantes Genéricos -->
+    <div id="quick-card-popover" class="floating-popover"></div>
+    <div id="quick-assist-popover" class="floating-popover assist-menu"></div>
+
+    <!-- Notificación Flotante de Deshacer (Toast) -->
+    <div id="global-toast">
+        <span id="toast-text">Acción registrada de forma segura.</span>
+        <button onclick="ejecutarDeshacer()">Deshacer</button>
+    </div>
+
+    <script>
+        const MQTT_TOPIC = "kings_elite_champions/torneo_data_v3_pro";
+        const mqttClient = mqtt.connect('wss://broker.hivemq.com:8884/mqtt');
+
+        let coreDB = {
+            config: { formato: "liga_ko", titularesCount: 5, dateStart: "2026-06-06", timeStart: "09:00", gameDuration: 45, venues: "Campo A, Campo B" },
+            equipos: [], partidos: [], goleadores: [], mvp: { nombre: "Por definir", equipo: "N/A" }, noticias: [],
+            comunidad: { enlaces: [], preguntas: [], encuesta: { pregunta: "Sin votaciones activas", opciones: [], activa: false } }
+        };
+
+        let idEquipoEditando = null;
+        let logoClickCounter = 0;
+        let logoClickTimer = null;
+        let dbBackupSnapshot = null;
+        let toastTimeout = null;
+
+        if (localStorage.getItem("kings_elite_db_v3")) {
+            coreDB = JSON.parse(localStorage.getItem("kings_elite_db_v3"));
+        }
+
+        mqttClient.on('connect', () => {
+            document.getElementById("sync-status").innerText = "Conectado Remoto";
+            document.getElementById("sync-status").className = "status-connected";
+            mqttClient.subscribe(MQTT_TOPIC);
+        });
+        mqttClient.on('close', () => {
+            document.getElementById("sync-status").innerText = "Modo Local Activo";
+            document.getElementById("sync-status").className = "status-disconnected";
+        });
+        mqttClient.on('message', (topic, message) => {
+            if (topic === MQTT_TOPIC) {
+                coreDB = JSON.parse(message.toString());
+                localStorage.setItem("kings_elite_db_v3", JSON.stringify(coreDB));
+                renderEngine();
+                if(document.getElementById("admin-interactive-area").style.display === "block") syncAdminSelectors();
+            }
+        });
+
+        function saveAndSync() {
+            localStorage.setItem("kings_elite_db_v3", JSON.stringify(coreDB));
+            renderEngine();
+            mqttClient.publish(MQTT_TOPIC, JSON.stringify(coreDB), { qos: 1, retain: true });
+        }
+
+        function switchView(view) {
+            document.querySelectorAll('.view-pane').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`view-${view}`).classList.add('active');
+            document.getElementById(`tab-${view}`).classList.add('active');
+        }
+
+        function switchAdminTab(tab) {
+            document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
+            document.querySelectorAll('.admin-nav-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById(`atc-${tab}`).classList.add('active');
+            document.getElementById(`anb-${tab}`).classList.add('active');
+            if(tab === 'premios') { actualizarDatalistGoleadores(); actualizarDatalistMvp(); }
+            if(tab === 'actas') cargarDetalleActaPartido();
+        }
+
+        /* MODO INCÓGNITO: Acceso Oculto de Administración */
+        function handleLogoAdminTrigger() {
+            logoClickCounter++;
+            clearTimeout(logoClickTimer);
+            logoClickTimer = setTimeout(() => { logoClickCounter = 0; }, 1200);
+
+            if (logoClickCounter === 3) {
+                logoClickCounter = 0;
+                triggerAdminPanel();
+            }
+        }
+
+        function triggerAdminPanel() {
+            const p = document.getElementById("admin-main-panel");
+            p.style.display = (p.style.display === "block") ? "none" : "block";
+            if(p.style.display === "block") { buildRosterInputs(); p.scrollIntoView({ behavior: 'smooth' }); }
+        }
+
+        function unlockAdmin() {
+            if(document.getElementById("pass-key").value === "wheatley10") {
+                document.getElementById("auth-box").style.display = "none";
+                document.getElementById("admin-interactive-area").style.display = "block";
+                buildRosterInputs();
+                syncAdminSelectors();
+            } else { alert("Clave de acceso incorrecta."); }
+        }
+
+        /* RED DE SEGURIDAD: Toast con opción Deshacer */
+        function crearSnapshotSeguridad(mensaje) {
+            dbBackupSnapshot = JSON.stringify(coreDB);
+            const toast = document.getElementById("global-toast");
+            document.getElementById("toast-text").innerText = mensaje;
+            toast.style.display = "flex";
+            
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => { toast.style.display = "none"; }, 5000);
+        }
+
+        function ejecutarDeshacer() {
+            if (dbBackupSnapshot) {
+                coreDB = JSON.parse(dbBackupSnapshot);
+                dbBackupSnapshot = null;
+                document.getElementById("global-toast").style.display = "none";
+                saveAndSync();
+                if(document.getElementById("atc-actas").classList.contains("active")) cargarDetalleActaPartido();
+            }
+        }
+
+        function buildRosterInputs() {
+            const count = parseInt(document.getElementById("cfg-titulares-count").value || 5);
+            const container = document.getElementById("inputs-titulares-dinamicos");
+            container.innerHTML = "";
+            for(let i=1; i<=count; i++) {
+                container.innerHTML += `
+                    <div style="margin-bottom:6px;">
+                        <input type="text" class="input-titular-item" placeholder="Titular #${i} (Nombre Completo)" required>
+                    </div>`;
+            }
+        }
+
+        function parseShield(shieldStr) {
+            if (!shieldStr) return `<div class="shield-container">🛡️</div>`;
+            if (shieldStr.startsWith('http') || shieldStr.startsWith('data:image')) {
+                return `<div class="shield-container"><img src="${shieldStr}"></div>`;
+            }
+            return `<div class="shield-container">${shieldStr}</div>`;
+        }
+
+        function renderizarEnlaces(texto) {
+            if (!texto) return "";
+            const regexUrl = /(https?:\/\/[^\s]+)/g;
+            return texto.replace(regexUrl, function(url) {
+                return `<a href="${url}" target="_blank" rel="noopener noreferrer" style="color: #00e676; text-decoration: underline; font-weight: 700;">${url}</a>`;
+            });
+        }
+
+        function reiniciarTorneo() {
+            if (confirm("🚨 ¿REINICIAR TODO? Se borrarán de forma definitiva todos los registros reales.")) {
+                coreDB = {
+                    config: { formato: "liga_ko", titularesCount: 5, dateStart: "2026-06-06", timeStart: "09:00", gameDuration: 45, venues: "Campo A, Campo B" },
+                    equipos: [], partidos: [], goleadores: [], mvp: { nombre: "Por definir", equipo: "N/A" }, noticias: [],
+                    comunidad: { enlaces: [], preguntas: [], encuesta: { pregunta: "Sin votaciones activas", opciones: [], activa: false } }
+                };
+                cancelarEdicionEquipo();
+                syncAdminSelectors();
+                saveAndSync();
+                alert("Base de datos limpia.");
+                location.reload();
+            }
+        }
+
+        function algoritmoRoundRobinAvanzado(equiposIds) {
+            let list = [...equiposIds];
+            if (list.length % 2 !== 0) list.push(null);
+            let rounds = list.length - 1;
+            let matchesPerRound = list.length / 2;
+            let partidos = [];
+
+            const dateStartInput = document.getElementById("cal-date-start").value;
+            const timeStartInput = document.getElementById("cal-time-start").value;
+            const duration = parseInt(document.getElementById("cal-duration").value || 45);
+            const venues = document.getElementById("cal-venues").value.split(',').map(v => v.trim()).filter(v=>v);
+            let baseDateTime = new Date(`${dateStartInput}T${timeStartInput}`);
+
+            for (let round = 0; round < rounds; round++) {
+                let roundDate = new Date(baseDateTime.getTime());
+                roundDate.setDate(roundDate.getDate() + round);
+                let dailyMatchIndex = 0;
+
+                for (let match = 0; match < matchesPerRound; match++) {
+                    let home = list[match];
+                    let away = list[list.length - 1 - match];
+                    
+                    if (home !== null && away !== null) {
+                        let venueIndex = dailyMatchIndex % venues.length;
+                        let timeShiftSlot = Math.floor(dailyMatchIndex / venues.length);
+                        let matchTime = new Date(roundDate.getTime() + (timeShiftSlot * duration * 60000));
+
+                        partidos.push({
+                            id: Date.now() + Math.random(), local: round % 2 === 1 ? away : home, visitante: round % 2 === 1 ? home : away,
+                            golesL: "-", golesV: "-", estado: "Pendiente", fase: "Liga Regular", instancia: `Jornada ${round + 1}`,
+                            fecha: matchTime.toLocaleDateString('es-ES', {day: '2-digit', month:'2-digit', year:'numeric'}),
+                            hora: matchTime.toLocaleTimeString('es-ES', {hour: '2-digit', minute:'2-digit'}),
+                            sede: venues[venueIndex] || "Campo General", timeline: []
+                        });
+                        dailyMatchIndex++;
+                    }
+                }
+                list.splice(1, 0, list.pop());
+            }
+            return partidos;
+        }
+
+        function generarBracketIdaVuelta(equiposIds) {
+            let partidos = [];
+            if (equiposIds.length < 2) return partidos;
+
+            const dateStartInput = document.getElementById("cal-date-start").value;
+            const timeStartInput = document.getElementById("cal-time-start").value;
+            const duration = parseInt(document.getElementById("cal-duration").value || 45);
+            const venues = document.getElementById("cal-venues").value.split(',').map(v => v.trim()).filter(v=>v);
+            let baseDateTime = new Date(`${dateStartInput}T${timeStartInput}`);
+
+            let n = equiposIds.length;
+            let slots = Math.floor(n / 2);
+            let idxMatch = 0;
+
+            let labelFase = "Ronda de Eliminatorias";
+            if (slots === 1) labelFase = "Final Directa";
+            else if (slots === 2) labelFase = "Semifinal";
+            else if (slots === 4) labelFase = "Cuartos de Final";
+
+            for (let i = 0; i < slots; i++) {
+                let local = equiposIds[i * 2];
+                let visitante = equiposIds[i * 2 + 1];
+
+                let timeIda = new Date(baseDateTime.getTime() + (idxMatch * duration * 60000));
+                partidos.push({
+                    id: Date.now() + Math.random(), local: local, visitante: visitante, golesL: "-", golesV: "-", estado: "Pendiente",
+                    fase: "Eliminatorias", instancia: `${labelFase} - Ida`,
+                    fecha: timeIda.toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit', year:'numeric'}),
+                    hora: timeIda.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'}),
+                    sede: venues[idxMatch % venues.length] || "Campo Central", timeline: []
+                });
+                idxMatch++;
+
+                let timeVuelta = new Date(baseDateTime.getTime() + (idxMatch * duration * 60000));
+                partidos.push({
+                    id: Date.now() + Math.random(), local: visitante, visitante: local, golesL: "-", golesV: "-", estado: "Pendiente",
+                    fase: "Eliminatorias", instancia: `${labelFase} - Vuelta`,
+                    fecha: timeVuelta.toLocaleDateString('es-ES', {day:'2-digit', month:'2-digit', year:'numeric'}),
+                    hora: timeVuelta.toLocaleTimeString('es-ES', {hour:'2-digit', minute:'2-digit'}),
+                    sede: venues[idxMatch % venues.length] || "Campo Central", timeline: []
+                });
+                idxMatch++;
+            }
+            return partidos;
+        }
+
+        function procesarEstructuraTorneo() {
+            coreDB.config.formato = document.getElementById("cfg-formato").value;
+            coreDB.config.titularesCount = parseInt(document.getElementById("cfg-titulares-count").value);
+            
+            const ids = coreDB.equipos.map(e => e.id);
+            if(ids.length < 2) return alert("Inscribe un mínimo de 2 equipos.");
+
+            if (coreDB.config.formato === "ko_double") {
+                coreDB.partidos = generarBracketIdaVuelta(ids);
+            } else {
+                coreDB.partidos = algoritmoRoundRobinAvanzado(ids);
+            }
+
+            recalcularClasificacion();
+            saveAndSync();
+            alert("Estructura de fixture procesada exitosamente.");
+        }
+
+        function generarPlayoffsDesdeLiga() {
+            let sTeams = [...coreDB.equipos].sort((a,b)=> b.pts - a.pts || b.dg - a.dg);
+            if(sTeams.length < 4) return alert("Se necesitan al menos 4 equipos registrados para iniciar la Fase Final.");
+            if(!confirm("¿Construir llaves de Playoffs? (1º vs 4º y 2º vs 3º)")) return;
+
+            const dStart = document.getElementById("cal-date-start").value;
+            let timeBase = new Date(`${dStart}T17:00`);
+
+            coreDB.partidos.push({
+                id: Date.now() + 10, local: sTeams[0].id, visitante: sTeams[3].id, golesL: "-", golesV: "-", estado: "Pendiente",
+                fase: "Playoffs", instancia: "Semifinal 1", fecha: timeBase.toLocaleDateString('es-ES'), hora: "17:00",
+                sede: "Campo Principal A", timeline: []
+            });
+
+            coreDB.partidos.push({
+                id: Date.now() + 11, local: sTeams[1].id, visitante: sTeams[2].id, golesL: "-", golesV: "-", estado: "Pendiente",
+                fase: "Playoffs", instancia: "Semifinal 2", fecha: timeBase.toLocaleDateString('es-ES'), hora: "18:15",
+                sede: "Campo Principal A", timeline: []
+            });
+
+            saveAndSync();
+            alert("Cruces de Semifinales inyectados al calendario.");
+        }
+
+        function avanzarRondaKoDouble() {
+            let eliMatches = coreDB.partidos.filter(p => p.fase === "Eliminatorias");
+            if(eliMatches.length === 0) return alert("No existen cruces de eliminatorias vigentes.");
+
+            let unicosInstancia = [...new Set(eliMatches.map(p => p.instancia.split(" - ")[0]))];
+            let activaRound = unicosInstancia[unicosInstancia.length - 1];
+
+            let grupoFaseActual = eliMatches.filter(p => p.instancia.startsWith(activaRound));
+            let pendientes = grupoFaseActual.filter(p => p.estado !== "Terminado");
+            if(pendientes.length > 0) return alert(`Acción bloqueada: Faltan cerrar ${pendientes.length} actas en la fase ${activaRound}.`);
+
+            let ganadores = [];
+            let mapeoDuplicados = new Set();
+
+            for(let i=0; i<grupoFaseActual.length; i++) {
+                let m1 = grupoFaseActual[i];
+                let keyCruce = [m1.local, m1.visitante].sort().join("vs");
+                if(mapeoDuplicados.has(keyCruce)) continue;
+
+                let m2 = grupoFaseActual.find(x => x.id !== m1.id && ((x.local === m1.local && x.visitante === m1.visitante) || (x.local === m1.visitante && x.visitante === m1.local)));
+                if(!m2) continue;
+                mapeoDuplicados.add(keyCruce);
+
+                let totalA = (m1.golesL === '-' ? 0 : m1.golesL) + (m2.visitante === m1.local ? (m2.golesV === '-' ? 0 : m2.golesV) : (m2.golesL === '-' ? 0 : m2.golesL));
+                let totalB = (m1.golesV === '-' ? 0 : m1.golesV) + (m2.local === m1.visitante ? (m2.golesL === '-' ? 0 : m2.golesL) : (m2.golesV === '-' ? 0 : m2.golesV));
+
+                if (totalA > totalB) ganadores.push(m1.local);
+                else if (totalB > totalA) ganadores.push(m1.visitante);
+                else {
+                    alert(`⚖️ Empate Global Absoluto (${totalA}-${totalB}) detectado. Desempata añadiendo un evento en la línea de tiempo.`);
+                    return;
+                }
+            }
+
+            if(ganadores.length < 2) {
+                alert(`🎉 ¡Competición Finalizada! Vencedor: ${coreDB.equipos.find(e=>e.id === ganadores[0])?.nombre || 'Desconocido'}`);
+                return;
+            }
+
+            let proximaEtiqueta = "Ronda Siguiente";
+            if (ganadores.length === 2) proximaEtiqueta = "Gran Final";
+            else if (ganadores.length === 4) proximaEtiqueta = "Semifinal";
+
+            const dStart = document.getElementById("cal-date-start").value;
+            let baseTime = new Date(`${dStart}T15:00`);
+
+            for(let i=0; i<Math.floor(ganadores.length / 2); i++) {
+                let loc = ganadores[i * 2];
+                let vis = ganadores[i * 2 + 1];
+
+                coreDB.partidos.push({
+                    id: Date.now() + Math.random(), local: loc, visitante: vis, golesL: "-", golesV: "-", estado: "Pendiente",
+                    fase: "Eliminatorias", instancia: `${proximaEtiqueta} - Ida`, fecha: baseTime.toLocaleDateString('es-ES'), hora: "15:00",
+                    sede: "Campo Principal A", timeline: []
+                });
+                coreDB.partidos.push({
+                    id: Date.now() + Math.random(), local: vis, visitante: loc, golesL: "-", golesV: "-", estado: "Pendiente",
+                    fase: "Eliminatorias", instancia: `${proximaEtiqueta} - Vuelta`, fecha: baseTime.toLocaleDateString('es-ES'), hora: "16:15",
+                    sede: "Campo Principal A", timeline: []
+                });
+            }
+
+            saveAndSync();
+            alert(`Siguiente fase construida: ${proximaEtiqueta}`);
+        }
+
+        function guardarEquipo() {
+            const name = document.getElementById("add-eq-name").value.trim();
+            const shield = document.getElementById("add-eq-shield").value.trim();
+            const suplentesText = document.getElementById("add-suplentes-list").value.trim();
+
+            let titularesArr = [];
+            document.querySelectorAll(".input-titular-item").forEach(inp => {
+                if(inp.value.trim()) titularesArr.push(inp.value.trim());
+            });
+
+            if(!name) return alert("Nombre de club obligatorio.");
+            const minTitulares = coreDB.config.titularesCount || 5;
+            if(titularesArr.length < minTitulares) return alert(`Mínimo ${minTitulares} titulares exigidos.`);
+
+            const suplentesArr = suplentesText ? suplentesText.split(',').map(x => x.trim()).filter(x=>x) : [];
+
+            if (idEquipoEditando === null) {
+                coreDB.equipos.push({
+                    id: Date.now(), nombre: name, escudo: shield || "🛡️",
+                    titulares: titularesArr, suplentes: suplentesArr,
+                    pj:0, g:0, e:0, p:0, gf:0, gc:0, dg:0, pts:0, racha: []
+                });
+            } else {
+                const eq = coreDB.equipos.find(e => e.id === idEquipoEditando);
+                if(eq) { eq.nombre = name; eq.escudo = shield || "🛡️"; eq.titulares = titularesArr; eq.suplentes = suplentesArr; }
+                cancelarEdicionEquipo();
+            }
+
+            document.getElementById("add-eq-name").value = "";
+            document.getElementById("add-suplentes-list").value = "";
+            syncAdminSelectors();
+            saveAndSync();
+        }
+
+        function activarModoEdicion(id) {
+            const eq = coreDB.equipos.find(e => e.id === id);
+            if(!eq) return;
+            idEquipoEditando = id;
+            document.getElementById("form-equipo-titulo").innerText = "Editar Inscripción ✏️";
+            document.getElementById("add-eq-name").value = eq.nombre;
+            document.getElementById("add-eq-shield").value = eq.escudo;
+            document.getElementById("add-suplentes-list").value = (eq.suplentes || []).join(", ");
+
+            buildRosterInputs();
+            const inputs = document.querySelectorAll(".input-titular-item");
+            (eq.titulares || []).forEach((t, i) => { if(inputs[i]) inputs[i].value = t; });
+
+            document.getElementById("btn-guardar-equipo").innerText = "Guardar Cambios";
+            document.getElementById("btn-cancelar-edicion").style.display = "block";
+        }
+
+        function cancelarEdicionEquipo() {
+            idEquipoEditando = null;
+            document.getElementById("form-equipo-titulo").innerText = "Formulario de Inscripción";
+            document.getElementById("add-eq-name").value = "";
+            document.getElementById("add-suplentes-list").value = "";
+            buildRosterInputs();
+            document.getElementById("btn-guardar-equipo").innerText = "Inscribir Club";
+            document.getElementById("btn-cancelar-edicion").style.display = "none";
+        }
+
+        function eliminarEquipo(id) {
+            if(confirm("¿Remover club inscrito?")) {
+                coreDB.equipos = coreDB.equipos.filter(e => e.id !== id);
+                saveAndSync();
+                syncAdminSelectors();
+            }
+        }
+
+        /* DETERMINISMO LOGICO CRONÓMETRO: Cálculo exacto de tiempo sin saturar MQTT */
+        function calcularTiempoActual(p) {
+            if (p.estado === "1ª Parte" || p.estado === "2ª Parte") {
+                if (!p.timerStart) return { min: 0, seg: 0, str: "00:00" };
+                let diff = Math.floor((Date.now() - p.timerStart) / 1000);
+                let maxSec = (coreDB.config.gameDuration || 45) * 60;
+                let halfMax = Math.floor((coreDB.config.gameDuration || 45) / 2) * 60;
+                
+                if (p.estado === "1ª Parte" && diff >= halfMax) diff = halfMax;
+                if (p.estado === "2ª Parte" && diff >= maxSec) diff = maxSec;
+
+                let min = Math.floor(diff / 60);
+                let seg = diff % 60;
+                return { min, seg, str: `${String(min).padStart(2, '0')}:${String(seg).padStart(2, '0')}` };
+            }
+            if (p.estado === "Descanso") {
+                return { min: Math.floor((coreDB.config.gameDuration || 45) / 2), seg: 0, str: "DESCANSO" };
+            }
+            return { min: 0, seg: 0, str: "" };
+        }
+
+        function obtenerMinutoActualPartido(p) {
+            if (["1ª Parte", "Descanso", "2ª Parte"].includes(p.estado)) {
+                return calcularTiempoActual(p).min;
+            }
+            return 0;
+        }
+
+        /* DETERMINISMO LOGICO: REPROCESAR PARTIDO COMPLETO DESDE SU LÍNEA DE TIEMPO */
+        function reprocesarPartidoDesdeTimeline(p) {
+            const el = coreDB.equipos.find(x => x.id === p.local);
+            const ev = coreDB.equipos.find(x => x.id === p.visitante);
+            
+            p.statsCalculadas = {
+                golesL: 0, golesV: 0,
+                golesAsignados: {},
+                tarjetasAsignadas: {}, 
+                onPitchLocal: el ? [...el.titulares] : [],
+                onBenchLocal: el ? [...el.suplentes] : [],
+                onPitchVisitante: ev ? [...ev.titulares] : [],
+                onBenchVisitante: ev ? [...ev.suplentes] : [],
+                expulsados: []
+            };
+
+            if(!p.timeline) p.timeline = [];
+
+            p.timeline.forEach(evItem => {
+                const sc = p.statsCalculadas;
+                if (evItem.type === 'goal') {
+                    if (evItem.side === 'local') sc.golesL++; else sc.golesV++;
+                    sc.golesAsignados[evItem.player] = (sc.golesAsignados[evItem.player] || 0) + 1;
+                } 
+                else if (evItem.type === 'card') {
+                    if (!sc.tarjetasAsignadas[evItem.player]) {
+                        sc.tarjetasAsignadas[evItem.player] = { amarilla: 0, roja: false, expulsado: false };
+                    }
+                    if (evItem.cardType === 'amarilla') {
+                        sc.tarjetasAsignadas[evItem.player].amarilla++;
+                        if (sc.tarjetasAsignadas[evItem.player].amarilla >= 2) {
+                            sc.tarjetasAsignadas[evItem.player].roja = true;
+                            sc.tarjetasAsignadas[evItem.player].expulsado = true;
+                            sc.expulsados.push(evItem.player);
+                        }
+                    } else if (evItem.cardType === 'roja') {
+                        sc.tarjetasAsignadas[evItem.player].roja = true;
+                        sc.tarjetasAsignadas[evItem.player].expulsado = true;
+                        sc.expulsados.push(evItem.player);
+                    }
+                } 
+                else if (evItem.type === 'sub') {
+                    let arrPitch = evItem.side === 'local' ? sc.onPitchLocal : sc.onPitchVisitante;
+                    let arrBench = evItem.side === 'local' ? sc.onBenchLocal : sc.onBenchVisitante;
+                    
+                    let idxIn = arrBench.indexOf(evItem.playerIn);
+                    let idxOut = arrPitch.indexOf(evItem.playerOut);
+                    
+                    if (idxIn !== -1 && idxOut !== -1) {
+                        arrPitch[idxOut] = evItem.playerIn;
+                        arrBench[idxIn] = evItem.playerOut;
+                    }
+                }
+            });
+
+            if(p.estado !== "Pendiente") {
+                p.golesL = p.statsCalculadas.golesL;
+                p.golesV = p.statsCalculadas.golesV;
+            } else {
+                p.golesL = "-";
+                p.golesV = "-";
+            }
+        }
+
+        /* INTERACCIÓN 1: Gestión de Tarjetas (Rápidas y Automatizadas) */
+        function openQuickCardMenu(player, side, event) {
+            event.stopPropagation();
+            const pop = document.getElementById("quick-card-popover");
+            pop.style.top = `${event.pageY + 10}px`;
+            pop.style.left = `${event.pageX - 40}px`;
+            pop.style.display = "flex";
+            
+            pop.innerHTML = `
+                <button style="background:#eab308; color:#000;" onclick="injectCardEvent('${player.replace(/'/g, "\\'")}', '${side}', 'amarilla')">🟨 Amarilla</button>
+                <button style="background:#ef4444; color:#fff;" onclick="injectCardEvent('${player.replace(/'/g, "\\'")}', '${side}', 'roja')">🟥 Roja</button>
+            `;
+
+            const closePop = () => { pop.style.display = "none"; document.removeEventListener("click", closePop); };
+            setTimeout(() => document.addEventListener("click", closePop), 20);
+        }
+
+        function injectCardEvent(player, side, cardType) {
+            const pId = parseFloat(document.getElementById("actas-partido-select").value);
+            const p = coreDB.partidos.find(x => x.id === pId);
+            if(!p) return;
+
+            let min = obtenerMinutoActualPartido(p);
+            
+            // Comprobar automatización Doble Amarilla -> Roja
+            let avisoMsg = `Tarjeta registrada a ${player}`;
+            if (cardType === 'amarilla' && p.statsCalculadas?.tarjetasAsignadas[player]?.amarilla === 1) {
+                avisoMsg = `⚠️ ¡Doble Amarilla! ${player} recibe Roja Automática y es expulsado.`;
+            }
+
+            p.timeline.push({
+                id: Date.now(), type: 'card', player: player, side: side, cardType: cardType, minute: min
+            });
+
+            crearSnapshotSeguridad(`Acción registrada. [ Deshacer ]`);
+            if(avisoMsg.startsWith("⚠️")) alert(avisoMsg);
+
+            reprocesoGeneralActa(p);
+        }
+
+        /* INTERACCIÓN 2: Sustituciones Drag & Drop "Cambio de Cromo" */
+        function handleDragStart(ev, player, side) {
+            ev.dataTransfer.setData("text/plain", JSON.stringify({ player: player, side: side }));
+        }
+
+        function handleDragOver(ev, el) {
+            ev.preventDefault();
+            el.classList.add("drag-over");
+        }
+
+        function handleDragLeave(el) { el.classList.remove("drag-over"); }
+
+        function handleDropEvent(ev, targetPlayerOff, targetSide, elNode) {
+            ev.preventDefault();
+            elNode.classList.remove("drag-over");
+            
+            const data = JSON.parse(ev.dataTransfer.getData("text/plain") || "{}");
+            if (!data.player || data.side !== targetSide) return;
+            if (data.player === targetPlayerOff) return;
+
+            const pId = parseFloat(document.getElementById("actas-partido-select").value);
+            const p = coreDB.partidos.find(x => x.id === pId);
+            if(!p) return;
+
+            // Verificar que no esté expulsado
+            if (p.statsCalculadas?.expulsados?.includes(targetPlayerOff)) return;
+
+            let min = obtenerMinutoActualPartido(p);
+            p.timeline.push({
+                id: Date.now(), type: 'sub', playerIn: data.player, playerOut: targetPlayerOff, side: targetSide, minute: min
+            });
+
+            crearSnapshotSeguridad(`Sustitución registrada de forma segura.`);
+            reprocesoGeneralActa(p);
+
+            // Micro-animación feedback visual temporal
+            setTimeout(() => {
+                const nodeIn = document.getElementById(`p-row-${data.player.replace(/\s+/g, '_')}`);
+                const nodeOut = document.getElementById(`p-row-${targetPlayerOff.replace(/\s+/g, '_')}`);
+                if(nodeIn) nodeIn.classList.add("anim-sub-in");
+                if(nodeOut) nodeOut.classList.add("anim-sub-out");
+            }, 50);
+        }
+
+        /* INTERACCIÓN 3: Goles con Asistencia Flexible */
+        function openQuickGoalMenu(player, side, event) {
+            event.stopPropagation();
+            const pId = parseFloat(document.getElementById("actas-partido-select").value);
+            const p = coreDB.partidos.find(x => x.id === pId);
+            if(!p) return;
+
+            const pop = document.getElementById("quick-assist-popover");
+            pop.style.top = `${event.pageY + 10}px`;
+            pop.style.left = `${event.pageX - 80}px`;
+            pop.style.display = "flex";
+
+            let teamId = side === 'local' ? p.local : p.visitante;
+            let eq = coreDB.equipos.find(e => e.id === teamId);
+            let companeros = eq ? [...eq.titulares, ...eq.suplentes].filter(x => x !== player) : [];
+
+            let html = `<button class="assist-big-btn" onclick="injectGoalEvent('${player.replace(/'/g, "\\'")}', '${side}', null)">⚽ Sin asistencia / Desconocido</button>`;
+            companeros.forEach(comp => {
+                html += `<button onclick="injectGoalEvent('${player.replace(/'/g, "\\'")}', '${side}', '${comp.replace(/'/g, "\\'")}')">👟 Asst: ${comp}</button>`;
+            });
+            pop.innerHTML = html;
+
+            const closePop = () => { pop.style.display = "none"; document.removeEventListener("click", closePop); };
+            setTimeout(() => document.addEventListener("click", closePop), 20);
+        }
+
+        function injectGoalEvent(player, side, assistant) {
+            const pId = parseFloat(document.getElementById("actas-partido-select").value);
+            const p = coreDB.partidos.find(x => x.id === pId);
+            if(!p) return;
+
+            let min = obtenerMinutoActualPartido(p);
+            p.timeline.push({
+                id: Date.now(), type: 'goal', player: player, side: side, assistant: assistant, minute: min
+            });
+
+            crearSnapshotSeguridad(`¡Gol registrado! Marcador actualizado.`);
+            reprocesoGeneralActa(p);
+        }
+
+        /* INTERACCIÓN 4: Borrado de la Línea de Tiempo Vertical */
+        function borrarEventoTimeline(eventId) {
+            const pId = parseFloat(document.getElementById("actas-partido-select").value);
+            const p = coreDB.partidos.find(x => x.id === pId);
+            if(!p) return;
+
+            p.timeline = p.timeline.filter(ev => ev.id !== eventId);
+            crearSnapshotSeguridad(`Evento eliminado. Partido corregido automáticamente.`);
+            reprocesoGeneralActa(p);
+        }
+
+        function reprocesoGeneralActa(p) {
+            reprocesarPartidoDesdeTimeline(p);
+            recalcularClasificacion();
+            saveAndSync();
+            cargarDetalleActaPartido();
+        }
+
+        function cargarDetalleActaPartido() {
+            const pId = parseFloat(document.getElementById("actas-partido-select").value);
+            if (!pId) return;
+            const p = coreDB.partidos.find(x => x.id === pId);
+            if (!p) return;
+
+            const el = coreDB.equipos.find(x => x.id === p.local);
+            const ev = coreDB.equipos.find(x => x.id === p.visitante);
+
+            document.getElementById("actas-lbl-local").innerText = el ? el.nombre : "-";
+            document.getElementById("actas-lbl-visitante").innerText = ev ? ev.nombre : "-";
+            
+            if(!p.statsCalculadas) reprocesarPartidoDesdeTimeline(p);
+            
+            document.getElementById("actas-gl").value = p.estado === "Pendiente" ? 0 : p.statsCalculadas.golesL;
+            document.getElementById("actas-gv").value = p.estado === "Pendiente" ? 0 : p.statsCalculadas.golesV;
+            document.getElementById("actas-estado").value = p.estado;
+
+            const container = document.getElementById("actas-rosters-container");
+            container.innerHTML = "";
+
+            const renderCanchaSide = (team, side) => {
+                if(!team) return "";
+                const sc = p.statsCalculadas;
+                const arrPitch = side === 'local' ? sc.onPitchLocal : sc.onPitchVisitante;
+                const arrBench = side === 'local' ? sc.onBenchLocal : sc.onBenchVisitante;
+
+                let html = `<div class="roster-zone">
+                    <h3 style='margin:0 0 10px 0; font-size:0.85rem; color:#818cf8;'>🛡️ ${team.nombre}</h3>`;
+                
+                // Zona En el Campo (Drop Target)
+                html += `<div class="roster-zone-title">En el Campo</div>`;
+                arrPitch.forEach(pl => {
+                    const cards = sc.tarjetasAsignadas[pl] || { amarilla: 0, roja: false, expulsado: false };
+                    const goals = sc.golesAsignados[pl] || 0;
+                    const isSuspended = cards.expulsado;
+                    
+                    html += `
+                    <div class="p-row ${isSuspended?'player-suspended':''}" id="p-row-${pl.replace(/\s+/g, '_')}"
+                         ondragover="handleDragOver(event, this)" ondragleave="handleDragLeave(this)" ondrop="handleDropEvent(event, '${pl.replace(/'/g, "\\'")}', '${side}', this)">
+                        <span style="font-weight:600; font-size:0.85rem;">🏃 ${pl} <small style="color:var(--fotmob-green)">${goals>0?'⚽'+goals:''}</small> <small>${cards.amarilla===1?'🟨':''}${cards.roja?'🟥':''}</small></span>
+                        <div style="display:flex; gap:6px;">
+                            <button class="btn-action" style="padding:4px 8px; font-size:0.7rem; background:#10b981;" onclick="openQuickGoalMenu('${pl.replace(/'/g, "\\'")}', '${side}', event)">+ ⚽</button>
+                            <button class="btn-action" style="padding:4px 8px; font-size:0.7rem; background:var(--bg-badge); border:1px solid var(--border-color);" onclick="openQuickCardMenu('${pl.replace(/'/g, "\\'")}', '${side}', event)">🎴</button>
+                        </div>
+                    </div>`;
+                });
+
+                // Zona Banquillo (Draggable source)
+                html += `<div class="roster-zone-title" style="margin-top:14px;">Banquillo (Arrastrar hacia el campo)</div>`;
+                if(arrBench.length === 0) html += `<span style="font-size:0.7rem; color:var(--text-muted); display:block; padding:4px 12px;">Vacio</span>`;
+                arrBench.forEach(pl => {
+                    const cards = sc.tarjetasAsignadas[pl] || { amarilla: 0, roja: false, expulsado: false };
+                    const goals = sc.golesAsignados[pl] || 0;
+                    const isSuspended = cards.expulsado;
+
+                    html += `
+                    <div class="p-row ${isSuspended?'player-suspended':''}" id="p-row-${pl.replace(/\s+/g, '_')}" draggable="${!isSuspended}" ondragstart="handleDragStart(event, '${pl.replace(/'/g, "\\'")}', '${side}')">
+                        <span style="color:var(--text-secondary); font-size:0.8rem;">🪑 ${pl} <small style="color:var(--fotmob-green)">${goals>0?'⚽'+goals:''}</small> <small>${cards.amarilla===1?'🟨':''}${cards.roja?'🟥':''}</small></span>
+                        <span style="font-size:0.65rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">SUPLENTE</span>
+                    </div>`;
+                });
+
+                return html + `</div>`;
+            };
+
+            let wrapperGrid = document.createElement("div");
+            wrapperGrid.className = "grid-2";
+            wrapperGrid.innerHTML += renderCanchaSide(el, 'local');
+            wrapperGrid.innerHTML += renderCanchaSide(ev, 'visitante');
+            container.appendChild(wrapperGrid);
+
+            // Renderizar la línea de tiempo viva lateral
+            const stream = document.getElementById("match-timeline-stream");
+            stream.innerHTML = "";
+            if(!p.timeline || p.timeline.length === 0) {
+                stream.innerHTML = `<span style="color:var(--text-muted); font-size:0.8rem; text-align:center; display:block; margin-top:20px;">Sin eventos registrados.</span>`;
+            } else {
+                let sortedTimeline = [...p.timeline].sort((a,b) => b.id - a.id);
+                sortedTimeline.forEach(evItem => {
+                    let icon = "📌";
+                    let desc = "";
+                    if(evItem.type==='goal') { icon="⚽"; desc=`Gol de <strong>${evItem.player}</strong> ${evItem.assistant?`<small>(Asist: ${evItem.assistant})</small>`:''}`; }
+                    if(evItem.type==='card') { icon=evItem.cardType==='amarilla'?'🟨':'🟥'; desc=`Tarjeta a <strong>${evItem.player}</strong>`; }
+                    if(evItem.type==='sub') { icon="🔄"; desc=`Cambio: Entra ${evItem.playerIn}, Sale ${evItem.playerOut}`; }
+
+                    stream.innerHTML += `
+                        <div class="timeline-item">
+                            <div class="timeline-item-meta">
+                                <span>${icon} Min ${evItem.minute}'</span>
+                                <span style="color:var(--text-secondary); font-size:0.75rem;">${desc}</span>
+                            </div>
+                            <button class="btn-trash" onclick="borrarEventoTimeline(${evItem.id})">🗑️</button>
+                        </div>
+                    `;
+                });
+            }
+        }
+
+        function cambiarEstadoInmediato() {
+            const pId = parseFloat(document.getElementById("actas-partido-select").value);
+            const p = coreDB.partidos.find(x => x.id === pId);
+            if(p) {
+                let nuevoEstado = document.getElementById("actas-estado").value;
+                if ((nuevoEstado === "1ª Parte" || nuevoEstado === "2ª Parte") && p.estado !== nuevoEstado) {
+                    if (nuevoEstado === "2ª Parte") {
+                        let halfDuration = Math.floor((coreDB.config.gameDuration || 45) / 2);
+                        p.timerStart = Date.now() - (halfDuration * 60 * 1000);
+                    } else {
+                        p.timerStart = Date.now();
+                    }
+                }
+                p.estado = nuevoEstado;
+                reprocesoGeneralActa(p);
+            }
+        }
+
+        function recalcularClasificacion() {
+            coreDB.equipos.forEach(e => { e.pj=0; e.g=0; e.e=0; e.p=0; e.gf=0; e.gc=0; e.dg=0; e.pts=0; e.racha=[]; });
+            coreDB.partidos.forEach(p => {
+                if(!p.statsCalculadas) reprocesarPartidoDesdeTimeline(p);
+                if(p.fase === "Liga Regular" && (p.estado === "Terminado" || ["1ª Parte", "Descanso", "2ª Parte"].includes(p.estado))) {
+                    const l = coreDB.equipos.find(e => e.id === p.local);
+                    const v = coreDB.equipos.find(e => e.id === p.visitante);
+                    if(l && v) {
+                        let gl = p.statsCalculadas.golesL;
+                        let gv = p.statsCalculadas.golesV;
+
+                        l.pj++; v.pj++; l.gf += gl; l.gc += gv; v.gf += gv; v.gc += gl;
+                        if(gl > gv) { l.g++; l.pts+=3; v.p++; l.racha.push('G'); v.racha.push('P'); }
+                        else if(gv > gl) { v.g++; v.pts+=3; l.p++; v.racha.push('G'); l.racha.push('P'); }
+                        else { l.e++; v.e++; l.pts+=1; v.pts+=1; l.racha.push('E'); v.racha.push('E'); }
+                        l.dg = l.gf - l.gc; v.dg = v.gf - v.gc;
+                    }
+                }
+            });
+        }
+
+        function obtenerGoleadoresCombinados() {
+            let mapa = {};
+            (coreDB.goleadores || []).forEach(g => {
+                const key = `${g.nombre.toLowerCase()}||${g.equipo}`;
+                if (!mapa[key]) mapa[key] = { nombre: g.nombre, equipo: g.equipo, goles: 0 };
+                mapa[key].goles += g.goles;
+            });
+            coreDB.partidos.forEach(p => {
+                if(p.statsCalculadas?.golesAsignados) {
+                    for(let pl in p.statsCalculadas.golesAsignados) {
+                        const eq = coreDB.equipos.find(e => [...e.titulares, ...e.suplentes].includes(pl));
+                        const eqName = eq ? eq.nombre : "Desconocido";
+                        const key = `${pl.toLowerCase()}||${eqName}`;
+                        if(!mapa[key]) mapa[key] = { nombre: pl, equipo: eqName, goles: 0 };
+                        mapa[key].goles += p.statsCalculadas.golesAsignados[pl];
+                    }
+                }
+            });
+            return Object.values(mapa).filter(x => x.goles > 0);
+        }
+
+        function sumarGol() {
+            const team = document.getElementById("sc-team-select").value;
+            const name = document.getElementById("sc-name").value.trim();
+            const gc = parseInt(document.getElementById("sc-goals-count").value || 1);
+            if(!name) return alert("Escribe el nombre del goleador.");
+            if(!coreDB.goleadores) coreDB.goleadores = [];
+            coreDB.goleadores.push({ nombre: name, equipo: team, goles: gc });
+            document.getElementById("sc-name").value = "";
+            saveAndSync();
+            alert("Goles agregados de forma manual.");
+        }
+
+        function establecerMvp() {
+            const name = document.getElementById("mvp-name-input").value.trim();
+            const team = document.getElementById("mvp-team-select").value;
+            if(!name) return alert("Escribe el nombre.");
+            coreDB.mvp = { nombre: name, equipo: team };
+            document.getElementById("mvp-name-input").value = "";
+            saveAndSync();
+            alert("MVP Oficial asignado.");
+        }
+
+        function actualizarDatalistGoleadores() {
+            const tName = document.getElementById("sc-team-select").value;
+            const eq = coreDB.equipos.find(e => e.nombre === tName);
+            const dl = document.getElementById("squad-autocomplete"); dl.innerHTML = "";
+            if(eq) [...eq.titulares, ...eq.suplentes].forEach(p => { dl.innerHTML += `<option value="${p}">`; });
+        }
+
+        function actualizarDatalistMvp() {
+            const tName = document.getElementById("mvp-team-select").value;
+            const eq = coreDB.equipos.find(e => e.nombre === tName);
+            const dl = document.getElementById("mvp-autocomplete"); dl.innerHTML = "";
+            if(eq) [...eq.titulares, ...eq.suplentes].forEach(p => { dl.innerHTML += `<option value="${p}">`; });
+        }
+
+        function votarEncuesta(idx) {
+            const enc = coreDB.comunidad.encuesta;
+            if (!enc || !enc.activa) return;
+            const key = "voted_poll_" + enc.pregunta.replace(/\s+/g, '_');
+            if (localStorage.getItem(key)) return alert("Ya registraste tu voto.");
+            enc.opciones[idx].votos = (enc.opciones[idx].votos || 0) + 1;
+            localStorage.setItem(key, "true");
+            saveAndSync();
+        }
+
+        function enviarPreguntaUsuario() {
+            const name = document.getElementById("usr-q-name").value.trim() || "Anónimo";
+            const txt = document.getElementById("usr-q-text").value.trim();
+            if (!txt) return;
+            if(!coreDB.comunidad.preguntas) coreDB.comunidad.preguntas = [];
+            coreDB.comunidad.preguntas.unshift({ id: Date.now(), usuario: name, texto: txt, respuesta: "", respondida: false });
+            document.getElementById("usr-q-text").value = "";
+            saveAndSync();
+        }
+
+        function publicarNuevaEncuesta() {
+            const q = document.getElementById("adm-poll-q").value.trim();
+            const opts = document.getElementById("adm-poll-options").value.trim();
+            if(!q || !opts) return alert("Rellena todos los campos.");
+            const arr = opts.split(',').map(o => ({ texto: o.trim(), votos: 0 })).filter(o => o.texto);
+            coreDB.comunidad.encuesta = { pregunta: q, opciones: arr, activa: true };
+            saveAndSync();
+        }
+
+        function conmutarEstadoEncuesta() {
+            if(coreDB.comunidad.encuesta) { coreDB.comunidad.encuesta.activa = !coreDB.comunidad.encuesta.activa; saveAndSync(); }
+        }
+
+        function eliminarEncuesta() {
+            if(confirm("¿Eliminar encuesta?")) { coreDB.comunidad.encuesta = { pregunta: "Sin votaciones activas", opciones: [], activa: false }; saveAndSync(); }
+        }
+
+        function publicarAnuncio() {
+            const t = document.getElementById("adm-news-title").value.trim();
+            const c = document.getElementById("adm-news-content").value.trim();
+            if(!t || !c) return alert("Datos incompletos.");
+            coreDB.noticias.unshift({ id: Date.now(), titulo: t, contenido: c, fecha: new Date().toLocaleDateString('es-ES') });
+            saveAndSync();
+        }
+
+        function eliminarAnuncio(id) {
+            if(confirm("¿Eliminar aviso?")) { coreDB.noticias = coreDB.noticias.filter(n=>n.id !== id); saveAndSync(); }
+        }
+
+        function anadirEnlaceDirecto() {
+            const lbl = document.getElementById("adm-link-label").value.trim();
+            const url = document.getElementById("adm-link-url").value.trim();
+            if(!lbl || !url) return;
+            coreDB.comunidad.enlaces.push({ id: Date.now(), etiqueta: lbl, url: url });
+            saveAndSync();
+        }
+
+        function eliminarEnlaceComunidad(id) { coreDB.comunidad.enlaces = coreDB.comunidad.enlaces.filter(l=>l.id!==id); saveAndSync(); }
+
+        function responderPreguntaAdmin(id) {
+            const txt = document.getElementById(`adm-reply-text-${id}`).value.trim();
+            const q = coreDB.comunidad.preguntas.find(x=>x.id === id);
+            if(q) { q.respuesta = txt; q.respondida = true; saveAndSync(); }
+        }
+
+        function eliminarPregunta(id) { if(confirm("¿Eliminar?")) { coreDB.comunidad.preguntas = coreDB.comunidad.preguntas.filter(q=>q.id!==id); saveAndSync(); } }
+
+        function syncAdminSelectors() {
+            const listDiv = document.getElementById("admin-lista-equipos"); listDiv.innerHTML = "";
+            coreDB.equipos.forEach(e => {
+                listDiv.innerHTML += `<div class="team-manage-row ${e.id===idEquipoEditando?'is-editing':''}">
+                    <div>${parseShield(e.escudo)} <strong>${e.nombre}</strong></div>
+                    <div style="display:flex; gap:4px;"><button class="btn-action" style="padding:4px 8px; font-size:0.7rem;" onclick="activarModoEdicion(${e.id})">Editar</button><button class="btn-action btn-danger" style="padding:4px 8px; font-size:0.7rem;" onclick="eliminarEquipo(${e.id})">X</button></div>
+                </div>`;
+            });
+
+            const selActas = document.getElementById("actas-partido-select"); selActas.innerHTML = "";
+            coreDB.partidos.forEach(p => {
+                const el = coreDB.equipos.find(x => x.id === p.local); const ev = coreDB.equipos.find(x => x.id === p.visitante);
+                if(el && ev) selActas.innerHTML += `<option value="${p.id}">[${p.instancia}] ${el.nombre} vs ${ev.nombre}</option>`;
+            });
+
+            document.getElementById("sc-team-select").innerHTML = ""; document.getElementById("mvp-team-select").innerHTML = "";
+            coreDB.equipos.forEach(e => {
+                document.getElementById("sc-team-select").innerHTML += `<option value="${e.nombre}">${e.nombre}</option>`;
+                document.getElementById("mvp-team-select").innerHTML += `<option value="${e.nombre}">${e.nombre}</option>`;
+            });
+
+            const linkMgmt = document.getElementById("adm-lista-enlaces-gestion"); linkMgmt.innerHTML = "";
+            coreDB.comunidad.enlaces.forEach(l => {
+                linkMgmt.innerHTML += `<div class="mini-list-item"><span>${l.etiqueta}</span><button class="btn-action btn-danger" style="padding:2px 6px; font-size:0.65rem; width:auto;" onclick="eliminarEnlaceComunidad(${l.id})">X</button></div>`;
+            });
+
+            document.getElementById("adm-lista-preguntas-gestion").innerHTML = "";
+            (coreDB.comunidad.preguntas || []).forEach(q => {
+                document.getElementById("adm-lista-preguntas-gestion").innerHTML += `
+                <div style="background:var(--bg-main); border:1px solid var(--border-color); padding:10px; border-radius:8px;">
+                    <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--fotmob-amber); font-weight:bold; margin-bottom:4px;"><span>DE: ${q.usuario}</span><button onclick="eliminarPregunta(${q.id})" style="color:var(--fotmob-red); background:none; border:none; cursor:pointer;">X</button></div>
+                    <p style="margin:0 0 6px 0; font-size:0.8rem;">"${q.texto}"</p>
+                    <textarea id="adm-reply-text-${q.id}" style="height:40px; font-size:0.75rem; margin-bottom:4px;">${q.respuesta||''}</textarea>
+                    <button class="btn-action" style="padding:4px; font-size:0.7rem;" onclick="responderPreguntaAdmin(${q.id})">Responder</button>
+                </div>`;
+            });
+        }
+
+        function openMatchDetails(matchId) {
+            const p = coreDB.partidos.find(x => x.id === matchId); if(!p) return;
+            const el = coreDB.equipos.find(e => e.id === p.local); const ev = coreDB.equipos.find(e => e.id === p.visitante);
+            if(!el || !ev) return;
+
+            if(!p.statsCalculadas) reprocesarPartidoDesdeTimeline(p);
+            const sc = p.statsCalculadas;
+
+            let centerStr = `<div class="score-box pending">${p.hora||'VS'}</div>`;
+            if(p.estado === "Terminado") centerStr = `<div class="score-box">${sc.golesL} - ${sc.golesV}</div>`;
+            if(["1ª Parte", "Descanso", "2ª Parte"].includes(p.estado)) {
+                let t = calcularTiempoActual(p);
+                let txt = p.estado === "Descanso" ? "● DESCANSO" : `● ${p.estado} (${t.str})`;
+                centerStr = `<div class="m-center-score-block"><div class="score-box live">${sc.golesL} - ${sc.golesV}</div><span class="live-dot-text" data-live-match-id="${p.id}">${txt}</span></div>`;
+            }
+
+            document.getElementById("modal-match-header-content").innerHTML = `
+                <div class="m-team left-side" style="width:40%;">${parseShield(el.escudo)} <strong>${el.nombre}</strong></div>
+                ${centerStr}
+                <div class="m-team" style="width:40%;">${parseShield(ev.escudo)} <strong>${ev.nombre}</strong></div>`;
+
+            document.getElementById("modal-local-team-title").innerText = el.nombre;
+            document.getElementById("modal-visitor-team-title").innerText = ev.nombre;
+
+            const buildSide = (team, blockId) => {
+                const box = document.getElementById(blockId); box.innerHTML = "";
+                if(!team) return;
+                [...team.titulares, ...team.suplentes].forEach(pl => {
+                    const gl = sc.golesAsignados[pl] || 0;
+                    const am = sc.tarjetasAsignadas[pl]?.amarilla ? "🟨".repeat(sc.tarjetasAsignadas[pl].amarilla) : "";
+                    const rj = sc.tarjetasAsignadas[pl]?.roja ? "🟥" : "";
+                    
+                    if(gl>0 || am || rj) {
+                        box.innerHTML += `<div class="player-item"><span>📌 ${pl} <small style='color:var(--text-muted)'>${gl>0?'⚽'+gl:''} ${am} ${rj}</small></span></div>`;
+                    } else {
+                        box.innerHTML += `<div class="player-item"><span style="color:var(--text-secondary);">${pl}</span></div>`;
+                    }
+                });
+            };
+            buildSide(el, "modal-local-lineup"); 
+            buildSide(ev, "modal-visitor-lineup");
+            document.getElementById("match-details-modal").style.display = "flex";
+        }
+
+        function closeMatchModal() { document.getElementById("match-details-modal").style.display = "none"; }
+
+        function renderEngine() {
+            document.getElementById("dyn-subtitle").innerText = `Formato: Pro (${coreDB.config.titularesCount}v${coreDB.config.titularesCount})`;
+            const contMatches = document.getElementById("render-partidos-container"); contMatches.innerHTML = "";
+
+            let mapG = {};
+            coreDB.partidos.forEach(p => { if(!mapG[p.instancia]) mapG[p.instancia] = []; mapG[p.instancia].push(p); });
+
+            for(let key in mapG) {
+                let block = document.createElement("div");
+                block.innerHTML = `<div class="match-group-label"><span>${key}</span></div>`;
+                mapG[key].forEach(p => {
+                    const el = coreDB.equipos.find(x => x.id === p.local); const ev = coreDB.equipos.find(x => x.id === p.visitante);
+                    if(el && ev) {
+                        if(!p.statsCalculadas) reprocesarPartidoDesdeTimeline(p);
+                        let center = `<div class="score-box pending">${p.hora || 'VS'}</div>`;
+                        if(p.estado === "Terminado") center = `<div class="score-box">${p.statsCalculadas.golesL} - ${p.statsCalculadas.golesV}</div>`;
+                        if(["1ª Parte", "Descanso", "2ª Parte"].includes(p.estado)) {
+                            let t = calcularTiempoActual(p);
+                            let txt = p.estado === "Descanso" ? "● DESCANSO" : `● ${p.estado} (${t.str})`;
+                            center = `<div class="score-box live">${p.statsCalculadas.golesL} - ${p.statsCalculadas.golesV}</div><span class="live-dot-text" data-live-match-id="${p.id}">${txt}</span>`;
+                        }
+                        
+                        block.innerHTML += `
+                        <div class="match-row-item" onclick="openMatchDetails(${p.id})">
+                            <div class="m-info-meta"><span>📅 ${p.fecha||'-'}</span><span style="color:var(--text-muted); font-size:0.65rem;">📍 ${p.sede||'-'}</span></div>
+                            <div class="m-team left-side">${parseShield(el.escudo)} <span>${el.nombre}</span></div>
+                            <div class="m-center-score-block">${center}</div>
+                            <div class="m-team">${parseShield(ev.escudo)} <span>${ev.nombre}</span></div>
+                        </div>`;
+                    }
+                });
+                contMatches.appendChild(block);
+            }
+
+            const tbodyL = document.getElementById("render-tabla-liga"); tbodyL.innerHTML = "";
+            let sTeams = [...coreDB.equipos].sort((a,b)=> b.pts - a.pts || b.dg - a.dg);
+            sTeams.forEach((eq, i) => {
+                let estaJugando = coreDB.partidos.some(p => ["1ª Parte", "Descanso", "2ª Parte"].includes(p.estado) && (p.local === eq.id || p.visitante === eq.id));
+                let liveBadge = estaJugando ? ` <span class="live-dot-text" style="display:inline; margin-left:6px; font-size:0.7rem;">● EN VIVO</span>` : "";
+
+                let rachaHtml = `<div style="display:flex; gap:4px; justify-content:center;">`;
+                let ultimosCinco = (eq.racha || []).slice(-5);
+                if (ultimosCinco.length === 0) rachaHtml += `<span style="color:var(--text-muted); font-size:0.75rem;">-</span>`;
+                ultimosCinco.forEach(r => {
+                    if(r === 'G') rachaHtml += `<span style="background:var(--fotmob-green); color:#000; font-size:0.65rem; font-weight:800; border-radius:50%; width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center;">V</span>`;
+                    if(r === 'E') rachaHtml += `<span style="background:var(--text-muted); color:#fff; font-size:0.65rem; font-weight:800; border-radius:50%; width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center;">E</span>`;
+                    if(r === 'P') rachaHtml += `<span style="background:var(--fotmob-red); color:#fff; font-size:0.65rem; font-weight:800; border-radius:50%; width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center;">D</span>`;
+                });
+                rachaHtml += `</div>`;
+
+                tbodyL.innerHTML += `<tr>
+                    <td><span class="table-pos">${i+1}</span>${parseShield(eq.escudo)} <strong>${eq.nombre}</strong>${liveBadge}</td>
+                    <td style="text-align:center;">${eq.pj}</td><td style="text-align:center;">${eq.g}</td><td style="text-align:center;">${eq.e}</td><td style="text-align:center;">${eq.p}</td>
+                    <td style="text-align:center;">${eq.gf}</td><td style="text-align:center;">${eq.gc}</td><td style="text-align:center;">${eq.dg}</td>
+                    <td style="text-align:center;">${rachaHtml}</td><td style="text-align:center;" class="pts-bold">${eq.pts}</td>
+                </tr>`;
+            });
+
+            const tbodySc = document.getElementById("render-tabla-goleadores"); tbodySc.innerHTML = "";
+            obtenerGoleadoresCombinados().sort((a,b)=>b.goles-a.goles).forEach((sc, i) => {
+                tbodySc.innerHTML += `<tr><td>${i+1}</td><td><strong>${sc.nombre}</strong></td><td>${sc.equipo}</td><td style="color:var(--fotmob-green); font-weight:800;">${sc.goles}</td></tr>`;
+            });
+
+            let cleanSheets = {}; coreDB.equipos.forEach(e => { cleanSheets[e.id] = 0; });
+            coreDB.partidos.forEach(p => {
+                if(p.estado === "Terminado" && p.statsCalculadas) {
+                    if (p.statsCalculadas.golesL === 0 && cleanSheets[p.visitante] !== undefined) cleanSheets[p.visitante]++;
+                    if (p.statsCalculadas.golesV === 0 && cleanSheets[p.local] !== undefined) cleanSheets[p.local]++;
+                }
+            });
+
+            const tbodyPort = document.getElementById("render-tabla-porteros"); tbodyPort.innerHTML = "";
+            let porterosSorted = [...coreDB.equipos].map(e => ({ nombre: e.nombre, escudo: e.escudo, clean: cleanSheets[e.id] || 0 })).sort((a,b)=>b.clean - a.clean);
+            porterosSorted.forEach((pt, i) => {
+                tbodyPort.innerHTML += `<tr><td>${i+1}</td><td>${parseShield(pt.escudo)} <strong>${pt.nombre}</strong> (GK)</td><td style="text-align:center; color:var(--fotmob-blue); font-weight:800;">✨ ${pt.clean} Invictos</td></tr>`;
+            });
+
+            let disciplina = {};
+            coreDB.partidos.forEach(p => {
+                if(p.statsCalculadas?.tarjetasAsignadas) {
+                    for(let pl in p.statsCalculadas.tarjetasAsignadas) {
+                        if(!disciplina[pl]) {
+                            let eq = coreDB.equipos.find(e => [...e.titulares, ...e.suplentes].includes(pl));
+                            disciplina[pl] = { am: 0, rj: 0, eqName: eq ? eq.nombre : "N/A" };
+                        }
+                        disciplina[pl].am += p.statsCalculadas.tarjetasAsignadas[pl].amarilla;
+                        if(p.statsCalculadas.tarjetasAsignadas[pl].roja) disciplina[pl].rj++;
+                    }
+                }
+            });
+
+            const tbodySanc = document.getElementById("render-tabla-sanciones"); tbodySanc.innerHTML = "";
+            let listaSancionados = Object.entries(disciplina).map(([name, d]) => ({ nombre: name, ...d })).sort((a,b)=>b.rj - a.rj || b.am - a.am);
+            if (listaSancionados.length === 0) {
+                tbodySanc.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); font-size:0.8rem;">Juego limpio absoluto en el campeonato.</td></tr>`;
+            } else {
+                listaSancionados.forEach(s => {
+                    let estatus = `<span style="color:var(--fotmob-green); font-weight:700; font-size:0.75rem;">Habilitado</span>`;
+                    if(s.rj > 0 || s.am >= 3) estatus = `<span style="background:rgba(255,59,48,0.15); color:var(--fotmob-red); padding:3px 6px; border-radius:4px; font-weight:800; font-size:0.65rem;">🟥 SUSPENDIDO</span>`;
+                    tbodySanc.innerHTML += `<tr><td><strong>${s.nombre}</strong><br><small style="color:var(--text-muted);">${s.eqName}</small></td><td style="text-align:center; color:var(--fotmob-amber); font-weight:700;">${s.am}</td><td style="text-align:center; color:var(--fotmob-red); font-weight:700;">${s.rj}</td><td style="text-align:center;">${estatus}</td></tr>`;
+                });
+            }
+
+            document.getElementById("render-mvp-name").innerText = coreDB.mvp?.nombre || "-";
+            document.getElementById("render-mvp-team").innerText = coreDB.mvp?.equipo || "Sin asignar";
+
+            const tablon = document.getElementById("render-tablon-noticias"); tablon.innerHTML = "";
+            if (!coreDB.noticias || coreDB.noticias.length === 0) {
+                tablon.innerHTML = `<p style="color:var(--text-muted); font-size:0.85rem; text-align:center;">Sin boletines informativos.</p>`;
+            } else {
+                coreDB.noticias.forEach(n => {
+                    tablon.innerHTML += `<div style="background:var(--bg-main); padding:14px; border:1px solid var(--border-color); border-radius:10px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:6px;"><strong style="color:var(--fotmob-amber); font-size:0.9rem;">${n.titulo}</strong><small style="color:var(--text-muted);">${n.fecha}</small></div>
+                        <p style="margin:0; font-size:0.85rem; color:var(--text-secondary); line-height:1.4;">${renderizarEnlaces(n.contenido)}</p>
+                    </div>`;
+                });
+            }
+
+            const adminNoticias = document.getElementById("admin-noticias-listado"); adminNoticias.innerHTML = "";
+            (coreDB.noticias || []).forEach(n => {
+                adminNoticias.innerHTML += `<div class="mini-list-item"><span>${n.titulo}</span><button class="btn-action btn-danger" style="padding:2px 6px; font-size:0.65rem; width:auto;" onclick="eliminarAnuncio(${n.id})">X</button></div>`;
+            });
+
+            const containerLinks = document.getElementById("render-enlaces-comunidad"); containerLinks.innerHTML = "";
+            (coreDB.comunidad.enlaces || []).forEach(l => {
+                containerLinks.innerHTML += `<a href="${l.url}" target="_blank" class="link-card"><span>${l.etiqueta}</span><span style="color:var(--fotmob-green);">➔</span></a>`;
+            });
+
+            const enc = coreDB.comunidad.encuesta; const containerPoll = document.getElementById("render-modulo-encuesta");
+            if (!enc || !enc.opciones || enc.opciones.length === 0 || enc.pregunta === "Sin votaciones activas") {
+                document.getElementById("poll-box-title").innerText = "📊 Encuesta Cerrada";
+                containerPoll.innerHTML = `<p style="color:var(--text-muted); font-size:0.85rem; text-align:center;">No hay debates abiertos en este momento.</p>`;
+            } else {
+                document.getElementById("poll-box-title").innerText = enc.activa ? `📊 Encuesta: ${enc.pregunta}` : `🔒 Cerrada: ${enc.pregunta}`;
+                containerPoll.innerHTML = "";
+                const totalVotos = enc.opciones.reduce((acc, c) => acc + (c.votos || 0), 0);
+                const yaVoto = localStorage.getItem("voted_poll_" + enc.pregunta.replace(/\s+/g, '_')) !== null || !enc.activa;
+
+                enc.opciones.forEach((opt, idx) => {
+                    const pct = totalVotos > 0 ? Math.round((opt.votos / totalVotos) * 100) : 0;
+                    containerPoll.innerHTML += `<div class="poll-option-box ${yaVoto?'voted-disabled':''}" onclick="${yaVoto?'':`votarEncuesta(${idx})`}">
+                        <div class="poll-progress-bar" style="width: ${pct}%;"></div>
+                        <div class="poll-option-text"><span>${opt.texto}</span><span>${pct}% ${yaVoto?`<small>(${opt.votos}v)</small>`:''}</span></div>
+                    </div>`;
+                });
+            }
+
+            const containerQ = document.getElementById("render-lista-preguntas"); containerQ.innerHTML = "";
+            (coreDB.comunidad.preguntas || []).forEach(q => {
+                let rHtml = q.respondida ? `<div class="q-reply"><strong>Staff:</strong> ${renderizarEnlaces(q.respuesta)}</div>` : `<div class="q-reply" style="border-color:var(--fotmob-amber); color:var(--fotmob-amber);">⏱️ Esperando dictamen oficial...</div>`;
+                containerQ.innerHTML += `<div class="q-card"><div class="q-user">👤 ${q.usuario}</div><div class="q-text">${q.texto}</div>${rHtml}</div>`;
+            });
+        }
+
+        /* TICKER LOCAL: Actualiza los cronómetros en la pantalla del usuario segundo a segundo */
+        setInterval(() => {
+            document.querySelectorAll("[data-live-match-id]").forEach(el => {
+                const mId = parseFloat(el.getAttribute("data-live-match-id"));
+                const p = coreDB.partidos.find(x => x.id === mId);
+                if (p) {
+                    let t = calcularTiempoActual(p);
+                    el.innerHTML = p.estado === "Descanso" ? "● DESCANSO" : `● ${p.estado} (${t.str})`;
+                }
+            });
+        }, 1000);
+
+        renderEngine();
+    </script>
+</body>
+</html>
